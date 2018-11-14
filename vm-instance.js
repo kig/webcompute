@@ -1,5 +1,9 @@
 var t0 = Date.now();
 
+const fs = require('fs');
+const crypto = require('crypto');
+const { execSync, execFileSync } = require('child_process');
+
 function sendResult(result) {
     try {
         process.stdout.write(result);
@@ -8,8 +12,6 @@ function sendResult(result) {
     }
 }
 
-const fs = require('fs');
-const { execSync, execFileSync } = require('child_process');
 const stdinBuffer = fs.readFileSync(0);
 const firstLine = stdinBuffer.indexOf(10);
 const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
@@ -28,7 +30,7 @@ const startTime = info.time;
 
 try {
 
-  var target = info.hash;
+  var target = crypto.createHash('sha256').update(program).digest('hex');
 
   process.chdir('./ispc/build');
 
@@ -37,7 +39,7 @@ try {
       fs.mkdirSync(`./targets/${target}`, {recursive: true});
     }
     fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-    execSync('make', [`TARGET=${target}`]);
+    execFileSync('/usr/bin/make', [`TARGET=${target}`]);
   }
 
   const output = execFileSync(`./targets/${target}/program`, [], {input: Buffer.from(programInput)});

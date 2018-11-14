@@ -1,0 +1,4 @@
+ispc/build/targets
+node_modules
+*~
+\#*\#
