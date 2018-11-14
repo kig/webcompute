@@ -16,77 +16,7 @@ app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x
 
 app.use('/monaco-editor/min/vs', express.static('node_modules/monaco-editor/min/vs'));
 
-app.get('/', (req, res) => res.send(
-`<!doctype html><html><body>
-<script>
-function send() {
- window.event.preventDefault();
- output.textContent = '';
- var green = '';
- fetch('/new' + green + '/' + this.vmname.value, {
-   method: 'POST',
-   body: window.vmsrcEditor.getValue()
- })
- .then(response => {
-  const reader = response.body.getReader();
-  const stream = new ReadableStream({
-    start(controller) {
-      var decoder = new TextDecoder('utf-8');
-      function push() {
-        reader.read().then(({ done, value }) => {
-          if (done) {
-            controller.close();
-            return;
-          }
-
-          output.textContent += decoder.decode(value, {stream: true});
-          push();
-        });
-      };
-
-      push();
-    }
-  });
-
-  return new Response(stream, { headers: { "Content-Type": "text/html" } });
- });
-}
-</script>
-<style>
-#container {
-width: 80em;
-height: 25em;
-}
-</style>
-	<nav>
-		<a href="list/">List running VMs</a>
-	</nav>
-	<h3>Create new VM</h3>
-        <form onsubmit="send()">
-	<p><input id="vmname" placeholder="VM Name">
-	<div id="container"></div>
-	<p><button>Run</button>
-        </form>
-	<p>VM output
-	<pre id="output"></pre>
-
-<script src="monaco-editor/min/vs/loader.js"></script>
-<script>
-    window.vmsrcEditor = null;
-    require.config({ paths: { 'vs': 'monaco-editor/min/vs' }});
-    require(['vs/editor/editor.main'], function() {
-        window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
-            value: [
-                'console.log("Hello world!");',
-                'return 1234;'
-            ].join('\\n'),
-            language: 'javascript'
-        });
-    });
-</script>
-
-</body></html>
-`));
+app.use('/', express.static('html'));
 
 var vmuid = 0;
 
@@ -199,9 +129,8 @@ app.post('/new/:name?', upload.none(), (req, res) => {
     processes[ps.pid] = ps;
     processesByName[ps.name] = ps;
     res.writeHead(200);
-    res.write(`${ps.pid.toString()}\n${ps.name}\n`)
     ps.imageHash = crypto.createHash('sha256').update(req.body).digest('hex');
-    res.write(`${ps.imageHash}\n`);
+    res.write(JSON.stringify({pid: ps.pid, name: ps.name, hash: 'sha256:'+ps.imageHash, startTime: time}) + '\n');
     ps.stdout.on('close', () => res.end());
     ps.stdout.on('data', (msg) => res.write(msg));
 });

@@ -11,29 +11,40 @@ function sendResult(result) {
 const fs = require('fs');
 const { execSync, execFileSync } = require('child_process');
 const stdinBuffer = fs.readFileSync(0);
-const stdinString = stdinBuffer.toString();
-const [infoString] = stdinString.split('\n', 1);
+const firstLine = stdinBuffer.indexOf(10);
+const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
+const infoString = stdinBuffer.slice(0, firstLine).toString();
 const info = JSON.parse(infoString);
-const script = stdinString.slice(infoString.length+1);
+const program = JSON.parse(stdinBuffer.slice(firstLine + 1, secondLine).toString());
+const programInputObj = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
 
-console.log(info, script);
+const programInput = new ArrayBuffer(programInputObj.input.length*4 + 4);
+const i32 = new Int32Array(programInput, 0, 1);
+i32[0] = programInputObj.outputLength;
+const f32 = new Float32Array(programInput, 4);
+f32.set(programInputObj.input);
 
 const startTime = info.time;
 
 try {
 
+  var target = info.hash;
+
   process.chdir('./ispc/build');
 
-  fs.writeFileSync('runner.ispc', script);
+  if (!fs.existsSync(`./targets/${target}/program`)) {
+    if (!fs.existsSync(`./targets/${target}`)) {
+      fs.mkdirSync(`./targets/${target}`, {recursive: true});
+    }
+    fs.writeFileSync(`./targets/${target}/program.ispc`, program);
+    execSync('make', [`TARGET=${target}`]);
+  }
 
-  execSync('make');
-
-  const output = execFileSync('./runner', info.args, {input: ''});
+  const output = execFileSync(`./targets/${target}/program`, [], {input: Buffer.from(programInput)});
 
   var t1 = Date.now();
-  process.stdout.write("\n------ Elapsed: " + (t1-t0) + " ms\n")
-  process.stdout.write("------ Total Elapsed: " + (t1-startTime) + " ms\n")
 
+  process.stdout.write("application/octet-stream\n");
   sendResult(output);
 
 
