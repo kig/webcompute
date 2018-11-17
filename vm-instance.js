@@ -30,28 +30,30 @@ const startTime = info.time;
 
 try {
 
-  var target = crypto.createHash('sha256').update(program).digest('hex');
+    var target = crypto.createHash('sha256').update(program).digest('hex');
 
-  process.chdir('./ispc/build');
+    process.chdir('./ispc/build');
 
-  if (!fs.existsSync(`./targets/${target}/program`)) {
-    if (!fs.existsSync(`./targets/${target}`)) {
-      fs.mkdirSync(`./targets/${target}`, {recursive: true});
+    if (!fs.existsSync(`./targets/${target}/program`)) {
+	if (!fs.existsSync(`./targets/${target}`)) {
+	    fs.mkdirSync(`./targets/${target}`, {recursive: true});
+	}
+	fs.writeFileSync(`./targets/${target}/program.ispc`, program);
+	execFileSync('/usr/bin/make', [`TARGET=${target}`]);
     }
-    fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-    execFileSync('/usr/bin/make', [`TARGET=${target}`]);
-  }
 
-  const output = execFileSync(`./targets/${target}/program`, [], {input: Buffer.from(programInput)});
+    fs.writeFileSync(`./targets/${target}/input`, Buffer.from(programInput));
 
-  var t1 = Date.now();
+    const output = execFileSync(`./targets/${target}/program`, [], {input: Buffer.from(programInput)});
 
-  process.stdout.write("application/octet-stream\n");
-  sendResult(output);
+    var t1 = Date.now();
+
+    process.stdout.write("application/octet-stream\n");
+    sendResult(output);
 
 
 } catch(e) {
 
-  sendResult(e.stack.toString());
+    sendResult(e.stack.toString());
 
 }
