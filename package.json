@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "cors": "^2.8.5",
     "escape-html": "^1.0.3",
     "express": "^4.16.4",
     "express-graphql": "^0.6.12",

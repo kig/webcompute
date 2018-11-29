@@ -30,13 +30,14 @@ const startTime = info.time;
 
 try {
 
-    var target = crypto.createHash('sha256').update(program).digest('hex');
+    var cpusig = execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
+    var target = cpusig + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
     if (!fs.existsSync(`./targets/${target}/program`)) {
 	if (!fs.existsSync(`./targets/${target}`)) {
-	    fs.mkdirSync(`./targets/${target}`, {recursive: true});
+	    execFileSync('mkdir', ['-p', `./targets/${target}`]);
 	}
 	fs.writeFileSync(`./targets/${target}/program.ispc`, program);
 	execFileSync('/usr/bin/make', [`TARGET=${target}`]);

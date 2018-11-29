@@ -14,9 +14,28 @@
     <div id="editorc">
       <form onsubmit="send()">
 	<p><input id="vmname" placeholder="Process Name"></p>
-	<p><input id="vmparams" placeholder="Input param array (e.g. 1,2,3,4)"></p>
-	<p><input id="vmoutputsize" placeholder="Output array size in bytes"></p>
 	<div id="container"></div>
+	<h4>Target nodes</h4>
+	<p><input id="vmnodes" placeholder="Addresses of worker nodes (e.g. 192.168.1.19, bigserv, 192.168.1.4)"></p>
+	<h4>Input array</h4>
+	<p><input id="vmparams" placeholder="Input param array (e.g. 640,480,4,0..30,{2,4,8},12)"></p>
+	<h4>Output array size in bytes</h4>
+	<p><input id="vmoutputsize" placeholder="Output array size in bytes"></p>
+	<h4>Output type</h4>
+	<p>
+	  <select id="vmoutputtype">
+	    <option value="text">Text</option> 
+	    <option value="uint8gray">Uint8 Grayscale</option> 
+	    <option value="uint8rgba">Uint8 RGBA</option> 
+	    <option value="float32gray">Float32 Grayscale</option> 
+	    <option value="float32rgba">Float32 RGBA</option> 
+	    <option value="ppm">PPM RGB</option> 
+	  </select>
+	  <div class="vmoutputimagesize">
+	    <h4>Output image size</h4>
+	    <p><input id="vmoutputwidth" placeholder="Width"><input id="vmoutputheight" placeholder="Height"></p>
+	  </div>
+	</p>
 	<p><button>Run</button></p>
       </form>
     </div>

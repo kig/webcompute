@@ -1,4 +1,4 @@
-static inline int
+static inline unsigned int8
 mandel(float c_re, float c_im, int count) {
     float z_re = c_re, z_im = c_im;
     int i;
@@ -25,7 +25,7 @@ mandelbrot_scanline(uniform float x0, uniform float dx,
                     uniform float y0, uniform float dy,
                     uniform int width, uniform int height,
                     uniform int xspan, uniform int yspan,
-                    uniform int maxIterations, uniform int output[]) {
+                    uniform int maxIterations, uniform unsigned int8 output[]) {
     const uniform int xstart = taskIndex0 * xspan;
     const uniform int xend   = min(xstart  + xspan, width);
     const uniform int ystart = taskIndex1 * yspan;
@@ -42,7 +42,7 @@ mandelbrot_scanline(uniform float x0, uniform float dx,
 
 
 export void
-main_ispc(uniform float input[], uniform int output[]) {
+main_ispc(uniform float input[], uniform unsigned int8 output[]) {
 
     uniform float x0 = input[0];
     uniform float y0 = input[1];
@@ -54,7 +54,7 @@ main_ispc(uniform float input[], uniform int output[]) {
 
     uniform float dx = (x1 - x0) / width;
     uniform float dy = (y1 - y0) / height;
-    const uniform int xspan = max(128, programCount*8); /* make sure it is big enough to avoid false-sharing */
+    const uniform int xspan = width / 4;
     const uniform int yspan = 4;
 
 

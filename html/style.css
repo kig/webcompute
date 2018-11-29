@@ -1,9 +1,35 @@
 html, body {
   margin: 0;
   padding: 0;
+  font-family: sans-serif;
 }
 input {
     width: 100%;
+}
+nav {
+    margin: 10px;
+}
+h3 {
+    margin-left: 10px;
+    margin-bottom: 0;
+    margin-top: 1em;
+}
+h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: normal;
+    margin-top: 8px;
+}
+p {
+    margin: 0;
+}
+#vmoutputwidth,
+#vmoutputheight
+{
+    width: 40%;
+}
+#vmoutputwidth {
+    margin-right: 10%;
 }
 #editorc {
   vertical-align: top;
@@ -27,7 +53,11 @@ canvas {
 }
 #container {
   width: 100%;
-  height: 30em;
+  height: calc(100vh - 360px);
   border: 1px solid #eee;
   border-radius: 5px;
+}
+#output {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
 }
