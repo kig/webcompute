@@ -18,20 +18,12 @@ const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
 const infoString = stdinBuffer.slice(0, firstLine).toString();
 const info = JSON.parse(infoString);
 const program = JSON.parse(stdinBuffer.slice(firstLine + 1, secondLine).toString());
-const programInputObj = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
-
-const programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
-const i32 = new Int32Array(programInput, 0, 1);
-i32[0] = programInputObj.outputLength;
-const f32 = new Float32Array(programInput, 4);
-f32.set(programInputObj.input);
 
 const startTime = info.time;
 
 try {
 
-    var cpusig = execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
-    var target = cpusig + "/" + crypto.createHash('sha256').update(program).digest('hex');
+    var target = info.arch + "-" + info.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
@@ -39,17 +31,23 @@ try {
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
+        const bits = info.arch === 'arm' ? '32' : '64';
+        const ispc = info.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
         fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-        execFileSync('/usr/bin/make', [`TARGET=${target}`]);
+        execFileSync('/usr/bin/make', [
+            'ispc',
+            `ISPC=${ispc}`, 
+            `BITS=${bits}`,
+            `FLAGS="--arch=${info.arch} --target=${info.target} --addressing=${info.addressing}`,
+            `TARGET=${target}`
+        ]);
     }
 
-    fs.writeFileSync(`./targets/${target}/input`, Buffer.from(programInput));
-
-    const output = execFileSync(`./targets/${target}/program`, [], { input: Buffer.from(programInput) });
+    const output = fs.readFileSync(`./targets/${target}/program.o`);
 
     var t1 = Date.now();
 
-    process.stdout.write("application/octet-stream\n");
+    process.stdout.write("application/x-object\n");
     sendResult(output);
 
 
