@@ -1,5 +1,4 @@
 var t0 = Date.now();
-
 const fs = require('fs');
 const crypto = require('crypto');
 const { execSync, execFileSync } = require('child_process');
@@ -11,27 +10,33 @@ function sendResult(result) {
         process.stdout.write(err.stack.toString());
     }
 }
-
-const stdinBuffer = fs.readFileSync(0);
-const firstLine = stdinBuffer.indexOf(10);
-const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
-const infoString = stdinBuffer.slice(0, firstLine).toString();
-const info = JSON.parse(infoString);
-const program = JSON.parse(stdinBuffer.slice(firstLine + 1, secondLine).toString());
-const programInputObj = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
-
-const programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
-const i32 = new Int32Array(programInput, 0, 1);
-i32[0] = programInputObj.outputLength;
-const f32 = new Float32Array(programInput, 4);
-f32.set(programInputObj.input);
-
-const startTime = info.time;
-
 try {
+    const stdinBuffer = fs.readFileSync(0);
+    const firstLine = stdinBuffer.indexOf(10);
+    const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
+    const infoString = stdinBuffer.slice(0, firstLine).toString();
+    const info = JSON.parse(infoString);
+    const programInputObj = JSON.parse(stdinBuffer.slice(firstLine + 1, secondLine).toString());
+    const program = stdinBuffer.slice(secondLine + 1);
 
-    var cpusig = execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
-    var target = cpusig + "/" + crypto.createHash('sha256').update(program).digest('hex');
+    const programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
+    const i32 = new Int32Array(programInput, 0, 1);
+    i32[0] = programInputObj.outputLength;
+    const f32 = new Float32Array(programInput, 4);
+    f32.set(programInputObj.input);
+
+    const startTime = info.time;
+
+
+    var cpusig;
+    if (fs.existsSync('/proc/cpuinfo')) {
+        cpusig = 'linux-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
+    } else if (fs.existsSync('/Library/ColorSync')) {
+        cpusig = 'macos-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
+    } else {
+        throw new Error("Unknown platform");
+    }
+    var target = cpusig + '/' + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
@@ -39,8 +44,13 @@ try {
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
-        fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-        execFileSync('/usr/bin/make', [`TARGET=${target}`]);
+        if (programInputObj.binary) {
+            fs.writeFileSync(`./targets/${target}/program.o`, program);
+            execFileSync('/usr/bin/make', [`TARGET=${target}`, `link`]);
+        } else {
+            fs.writeFileSync(`./targets/${target}/program.ispc`, program);
+            execFileSync('/usr/bin/make', [`TARGET=${target}`, `ispc`, `link`]);
+        }
     }
 
     fs.writeFileSync(`./targets/${target}/input`, Buffer.from(programInput));

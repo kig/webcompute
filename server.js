@@ -3,7 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const escape = require('escape-html');
 const multer = require('multer'); // v1.0.5
-const upload = multer(); // for parsing multipart/form-data
+const upload = multer();
 const crypto = require('crypto');
 const { NodeVM } = require('vm2');
 
@@ -114,15 +114,14 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
     }
 });
 
-app.post('/new/:name?', upload.none(), (req, res) => {
-
+const runVM = function(instance, name, body, res) {
     var time = Date.now();
 
-    var ps = fork('./vm-instance', { stdio: 'pipe' });
-    ps.name = findName(req.params.name);
+    var ps = fork(instance, { stdio: 'pipe' });
+    ps.name = findName(name);
     Object.defineProperty(ps, 'status', { get: getStatus });
     ps.stdin.write(JSON.stringify({ pid: ps.pid, name: ps.name, time: time }) + '\n');
-    ps.stdin.write(req.body);
+    ps.stdin.write(body);
     ps.stdin.end();
     ps.on('exit', (err) => {
         delete processes[ps.pid];
@@ -131,33 +130,32 @@ app.post('/new/:name?', upload.none(), (req, res) => {
     processes[ps.pid] = ps;
     processesByName[ps.name] = ps;
     res.writeHead(200);
-    ps.imageHash = crypto.createHash('sha256').update(req.body).digest('hex');
+    ps.imageHash = crypto.createHash('sha256').update(body).digest('hex');
     res.write(JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time }) + '\n');
     ps.stdout.on('close', () => res.end());
     ps.stdout.on('data', (msg) => res.write(msg));
+}
+
+app.post('/new/:name?', (req, res) => {
+    var chunks = [];
+    req.on('data', function(chunk) {
+        chunks.push(chunk);
+    });
+    req.on('end', function() {
+        var buffer = Buffer.concat(chunks);
+        runVM('./vm-instance', req.params.name, buffer, res);
+    });
 });
 
-app.post('/build/:arch/:target', upload.none(), (req, res) => {
-
-    var time = Date.now();
-
-    var ps = fork('./build-instance', { stdio: 'pipe' });
-    ps.name = findName(req.params.name);
-    Object.defineProperty(ps, 'status', { get: getStatus });
-    ps.stdin.write(JSON.stringify({ pid: ps.pid, name: ps.name, time: time, arch: req.params.arch, target: req.params.target }) + '\n');
-    ps.stdin.write(req.body);
-    ps.stdin.end();
-    ps.on('exit', (err) => {
-        delete processes[ps.pid];
-        delete processesByName[ps.name];
+app.post('/build/:name?', (req, res) => {
+    var chunks = [];
+    req.on('data', function(chunk) {
+        chunks.push(chunk);
     });
-    processes[ps.pid] = ps;
-    processesByName[ps.name] = ps;
-    res.writeHead(200);
-    ps.imageHash = crypto.createHash('sha256').update(req.body).digest('hex');
-    res.write(JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time }) + '\n');
-    ps.stdout.on('close', () => res.end());
-    ps.stdout.on('data', (msg) => res.write(msg));
+    req.on('end', function() {
+        var buffer = Buffer.concat(chunks);
+        runVM('./build-instance', 'build-' + req.params.name, buffer, res);
+    });
 });
 
 app.get('/list', (req, res) => {

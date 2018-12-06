@@ -17,13 +17,15 @@ const firstLine = stdinBuffer.indexOf(10);
 const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
 const infoString = stdinBuffer.slice(0, firstLine).toString();
 const info = JSON.parse(infoString);
-const program = JSON.parse(stdinBuffer.slice(firstLine + 1, secondLine).toString());
+const argsString = stdinBuffer.slice(firstLine + 1, secondLine).toString();
+const args = JSON.parse(argsString);
+const program = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
 
 const startTime = info.time;
 
 try {
 
-    var target = info.arch + "-" + info.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
+    var target = args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
@@ -31,14 +33,14 @@ try {
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
-        const bits = info.arch === 'arm' ? '32' : '64';
-        const ispc = info.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
+        const bits = args.arch === 'arm' ? '32' : '64';
+        const ispc = args.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
         fs.writeFileSync(`./targets/${target}/program.ispc`, program);
         execFileSync('/usr/bin/make', [
             'ispc',
             `ISPC=${ispc}`, 
             `BITS=${bits}`,
-            `FLAGS="--arch=${info.arch} --target=${info.target} --addressing=${info.addressing}`,
+            `FLAGS="--arch=${args.arch} --target=${args.target} --addressing=${args.addressing}`,
             `TARGET=${target}`
         ]);
     }

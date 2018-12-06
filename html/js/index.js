@@ -11,7 +11,7 @@ function send() {
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		onResponse(res) {
+		async onResponse(res) {
 			const output = document.createElement('span');
 			document.getElementById('output').append(output);
 			const arrayBuffer = await Cluster.responseToArrayBuffer(res, (header) => {

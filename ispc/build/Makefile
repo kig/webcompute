@@ -1,5 +1,5 @@
 ISPC=ispc
-FLAGS=""
+FLAGS=
 TARGET=kernel
 BITS=64
 

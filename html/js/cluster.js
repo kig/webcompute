@@ -24,20 +24,23 @@ class Cluster {
 		this.processWorkQueue();
 	}
 
-	async build(node, source) {
+	async build(node, name, source) {
 		if (node.canBuild) {
-			return { blob: new Blob(source), isBinary: false };
+			return { blob: new Blob([source]), isBinary: false };
 		} else {
-			const fd = new FormData();
-			fd.append('args', JSON.stringify({ arch: node.arch, target: node.target, addressing: node.addressing }));
-			fd.append('source', source);
-			const res = await fetch(this.buildNodes[0].url + '/build', { method: 'POST', body: fd });
+			const vmSuffix = '/build/' + name;
+			const buildNode = this.buildNodes[0];
+			const args = { arch: node.arch, target: node.target, addressing: node.addressing };
+			const bin = JSON.stringify(source);
+			const body = new Blob([ JSON.stringify(args), '\n', bin ]);
+			const url = buildNode.url + vmSuffix;
+			const res = await fetch(url, { method: 'POST', body });
 			const blob = await res.blob();
 			return { blob, isBinary: true };
 		}
 	}
 
-	static async run(options) {
+	static run(options) {
 		const {
 			nodes,
 			name,
@@ -47,17 +50,17 @@ class Cluster {
 			onResponse
 		} = options;
 		var green = '';
-		var cluster = Cluster.parse(nodes);
-		var inputs = Cluster.expandParams(params);
+		var cluster = this.parse(nodes);
+		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
 		inputs.forEach((input) => {
 			cluster.getNode(async (node) => {
-				const program = await cluster.build(node, source);
-				var fd = new FormData();
-				fd.append('args', JSON.stringify({ input, outputLength, binary: program.isBinary }));
-				fd.append('program', program.blob);
-				var url = node.url + vmSuffix;
-				const res = await fetch(url, { method: 'POST', body: fd });
+				const program = await cluster.build(node, name, source);
+				const args = { input, outputLength, binary: program.isBinary };
+				const bin = program.blob;
+				const body = new Blob([ JSON.stringify(args), '\n', bin ]);
+				const url = node.url + vmSuffix;
+				const res = await fetch(url, { method: 'POST', body });
 				return onResponse(res);
 			});
 		});
@@ -78,7 +81,7 @@ class Cluster {
 			}
 			return { url, ...defaultParams, ...params };
 		});
-		if (nodes === []) {
+		if (nodes.length === 0) {
 			nodes.push({ url: '', ...defaultParams });
 		}
 		return new Cluster(nodes);
@@ -117,7 +120,7 @@ class Cluster {
 			return [];
 		}
 		var expanded = [];
-		var colParams = params.map(Cluster.expandParam);
+		var colParams = params.map(this.expandParam);
 		var indices = colParams.map(() => 0);
 		while (true) {
 			var arr = [];
@@ -209,13 +212,14 @@ class Cluster {
 		});
 	}
 
-	static async responseToArrayBuffer(response, onheader, ondata) {
+	static responseToArrayBuffer(response, onheader, ondata) {
 		return new Promise(async (resolve, reject) => {
 			const resultBlob = await this.responseToBlob(response, onheader, ondata);
 			var fileReader = new FileReader();
 			fileReader.onload = function (event) {
-				event.target.header = resultBlob.header;
-				resolve(event.target.result);
+				const arrayBuffer = event.target.result;
+				arrayBuffer.header = resultBlob.header;
+				resolve(arrayBuffer);
 			};
 			fileReader.onerror = reject;
 			fileReader.readAsArrayBuffer(resultBlob);
