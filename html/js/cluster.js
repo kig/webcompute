@@ -25,7 +25,7 @@ class Cluster {
 	}
 
 	async build(node, name, source) {
-		if (node.canBuild) {
+		if (node.canBuild === 'true') {
 			return { blob: new Blob([source]), isBinary: false };
 		} else {
 			const vmSuffix = '/build/' + name;
@@ -35,7 +35,7 @@ class Cluster {
 			const body = new Blob([ JSON.stringify(args), '\n', bin ]);
 			const url = buildNode.url + vmSuffix;
 			const res = await fetch(url, { method: 'POST', body });
-			const blob = await res.blob();
+			const blob = await Cluster.responseToBlob(res);
 			return { blob, isBinary: true };
 		}
 	}
@@ -70,7 +70,7 @@ class Cluster {
 	static parse(nodeString) {
 		const defaultParams = { canBuild: 'true', arch: 'x86-64', target: 'avx2-i32x16', addressing: '32' };
 		const nodes = nodeString.split(",").map(s => s.replace(/\s+/, '')).filter(s => s !== '').map(n => {
-			var [url, ...paramList] = n.split(/,/);
+			var [url, ...paramList] = n.split(';');
 			const params = paramList.reduce((obj, p) => {
 				var [k, v] = p.split("=");
 				obj[k] = v;
