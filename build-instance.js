@@ -40,7 +40,7 @@ try {
             'ispc',
             `ISPC=${ispc}`, 
             `BITS=${bits}`,
-            `FLAGS="--arch=${args.arch} --target=${args.target} --addressing=${args.addressing}`,
+            `FLAGS=--arch=${args.arch} --target=${args.target} --addressing=${args.addressing}`,
             `TARGET=${target}`
         ]);
     }
