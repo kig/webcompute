@@ -6,8 +6,9 @@ const multer = require('multer'); // v1.0.5
 const upload = multer();
 const crypto = require('crypto');
 const { NodeVM } = require('vm2');
+const fs = require('fs');
 
-const { fork, execFile, execFileSync } = require('child_process');
+const { fork, execFile, execSync, execFileSync } = require('child_process');
 
 const app = express();
 const port = 7172;
@@ -112,6 +113,84 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
         res.write("\n------ Elapsed: " + (t1 - t0) + " ms\n")
         res.end("------ Total Elapsed: " + (t1 - startTime) + " ms\n")
     }
+});
+
+var getTarget = function(nodeInfo) {
+    if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'arm') {
+	return 'neon-i32x4';
+    }
+    if (nodeInfo.arch === 'x86-64') {
+	if (nodeInfo.platform === 'linux') {
+	    var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
+	    if (keys.indexOf('avx2') > -1) {
+		return 'avx2-i32x8';
+	    } else if (keys.indexOf('avx') > -1) {
+		return 'avx1-i32x8';
+	    } else if (keys.indexOf('sse4_1') > -1 || keys.indexOf('sse4a') > -1) {
+		return 'sse4-i32x8';
+	    } else {
+		return 'sse2-i32x8';
+	    }
+	} else if (nodeInfo.platform === 'macos') {
+	    var keys = execSync(`sysctl -a | grep machdep.cpu | grep -o -E ' MMX\\S* | SSE\\S* | AVX\\S* '`).toString().toLowerCase().replace(/^\s+|\s+$/g, '').split(/\s+/);
+	    if (keys.indexOf('avx2') > -1) {
+                return 'avx2-i32x8';
+            } else if (keys.indexOf('avx1.0') > -1) {
+                return 'avx1-i32x8';
+            } else if (keys.indexOf('sse4.1') > -1) {
+                return 'sse4-i32x8';
+            } else {
+                return 'sse2-i32x8';
+            }
+	}
+    }
+    throw new Error("Unknown architecture");
+}
+
+var getThreadCount = function(nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+	return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
+    } else if (nodeInfo.platform === 'macos') {
+	return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
+    }
+    throw new Error("Unknown platform");
+}
+
+var getMemorySize = function(nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+	return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
+    } else if (nodeInfo.platform === 'macos') {
+	return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
+    }
+    throw new Error("Unknown platform");
+}
+
+var getCPUFreq = function(nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+	return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
+    } else {
+	var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
+	var freqs = [];
+	for (var i=0; i<nodeInfo.threadCount; i++) {
+	    freqs.push(freq);
+	}
+	return freqs;
+    }
+    return [];
+}
+
+var nodeInfo = {
+    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : 'macos',
+    arch: execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-')
+};
+nodeInfo.target = getTarget(nodeInfo);
+nodeInfo.threadCount = getThreadCount(nodeInfo);
+nodeInfo.memorySize = getMemorySize(nodeInfo);
+nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
+
+app.get('/info', (req, res) => {
+    res.writeHead(200);
+    res.end(JSON.stringify(nodeInfo));
 });
 
 const runVM = function(instance, name, body, res) {
