@@ -63,5 +63,5 @@ window.onresize = function () {
 };
 
 fetch('/nodes').then(res => res.json()).then(obj => {
-	window.getElementById('vmnodes').value = JSON.stringify(obj);
+	document.getElementById('vmnodes').value = JSON.stringify(obj);
 });

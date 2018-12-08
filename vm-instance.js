@@ -29,9 +29,12 @@ try {
 
 
     var cpusig;
+    var platform = 'linux';
+    var arch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
     if (fs.existsSync('/proc/cpuinfo')) {
         cpusig = 'linux-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
     } else if (fs.existsSync('/Library/ColorSync')) {
+        platform = 'macos';
         cpusig = 'macos-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
     } else {
         throw new Error("Unknown platform");
@@ -46,10 +49,21 @@ try {
         }
         if (programInputObj.binary) {
             fs.writeFileSync(`./targets/${target}/program.o`, program);
-            execFileSync('/usr/bin/make', [`TARGET=${target}`, `link`]);
+            execFileSync('/usr/bin/make', [
+                `TARGET=${target}`,
+                `PLATFORM=${platform}`,
+                `ARCH=${arch}`,
+                `link`
+            ]);
         } else {
             fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-            execFileSync('/usr/bin/make', [`TARGET=${target}`, `ispc`, `link`]);
+            execFileSync('/usr/bin/make', [
+                `TARGET=${target}`, 
+                `PLATFORM=${platform}`,
+                `ARCH=${arch}`,
+                `ispc`, 
+                `link`
+            ]);
         }
     }
 

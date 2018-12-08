@@ -297,7 +297,12 @@ const bodyAsString = (req, cb) => bodyAsBuffer(req, b => cb(b.toString()));
 const availableNodes = [];
 
 app.get('/nodes', (req, res) => {
-    res.end(JSON.stringify(availableNodes));
+    res.end(JSON.stringify(availableNodes.map(n => ({
+        url: 'http://' + n.host + ':' + n.port,
+        info: n.info,
+        addresses: n.addresses,
+        name: n.name
+    }))));
 });
 
 app.post('/nodes/add', (req, res) => {
@@ -332,7 +337,7 @@ const pingNode = (service, ok, fail) => {
 };
 
 const pruneNodes = () => {
-    setTimeout(pruneServices, 60000);
+    setTimeout(pruneNodes, 60000);
     availableNodes.forEach(n => pingNode(n, null, () => unregisterNode(n)));
 }
 

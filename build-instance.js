@@ -25,7 +25,7 @@ const startTime = info.time;
 
 try {
 
-    var target = args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
+    var target = args.platform + "-" + args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
@@ -40,6 +40,8 @@ try {
             'ispc',
             `ISPC=${ispc}`, 
             `BITS=${bits}`,
+            `PLATFORM=${args.platform}`,
+            `ARCH=${args.arch}`,
             `FLAGS=--arch=${args.arch} --target=${args.target} --addressing=${args.addressing}`,
             `TARGET=${target}`
         ]);

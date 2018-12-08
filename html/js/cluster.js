@@ -1,6 +1,6 @@
 class Cluster {
 	constructor(nodes) {
-		this.buildNodes = nodes.filter(n => n.canBuild === 'true');
+		this.buildNodes = nodes.filter(n => n.info.canBuild);
 		this.nodes = nodes;
 		this.availableNodes = nodes.slice();
 		this.workQueue = [];
@@ -10,6 +10,12 @@ class Cluster {
 	processWorkQueue() {
 		if (this.workQueue.length > 0 && this.availableNodes.length > 0) {
 			var node = this.availableNodes.shift();
+			while (node && node.disabled) {
+				node = this.availableNodes.shift();
+			}
+			if (!node) {
+				return;
+			}
 			var callback = this.workQueue.shift();
 			var doNext = () => {
 				this.availableNodes.push(node);
@@ -25,12 +31,20 @@ class Cluster {
 	}
 
 	async build(node, name, source) {
-		if (node.canBuild === 'true') {
+		if (node.info.canBuild) {
 			return { blob: new Blob([source]), isBinary: false };
 		} else {
 			const vmSuffix = '/build/' + name;
-			const buildNode = this.buildNodes[0];
-			const args = { arch: node.arch, target: node.target, addressing: node.addressing };
+			const args = { platform: node.info.platform, arch: node.info.arch, target: node.info.target, addressing: 32 };
+			const buildNode = this.buildNodes.find(bn => {
+				return (
+					bn.info.platform === args.platform &&
+					(bn.info.canCrossCompile || bn.info.arch === args.arch)
+				);
+			});
+			if (!buildNode) {
+				return false;
+			}
 			const bin = JSON.stringify(source);
 			const body = new Blob([ JSON.stringify(args), '\n', bin ]);
 			const url = buildNode.url + vmSuffix;
@@ -38,6 +52,10 @@ class Cluster {
 			const blob = await Cluster.responseToBlob(res);
 			return { blob, isBinary: true };
 		}
+	}
+
+	disableNode(node) {
+		node.disabled = true;
 	}
 
 	static run(options) {
@@ -53,9 +71,13 @@ class Cluster {
 		var cluster = this.parse(nodes);
 		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
-		inputs.forEach((input) => {
+		var runJob = (input) => {
 			cluster.getNode(async (node) => {
 				const program = await cluster.build(node, name, source);
+				if (!program) {
+					cluster.disableNode(node);
+					return runJob(input);
+				}
 				const args = { input, outputLength, binary: program.isBinary };
 				const bin = program.blob;
 				const body = new Blob([ JSON.stringify(args), '\n', bin ]);
@@ -63,13 +85,14 @@ class Cluster {
 				const res = await fetch(url, { method: 'POST', body });
 				return onResponse(res);
 			});
-		});
+		};
+		inputs.forEach(runJob);
 		return cluster;
 	}
 
 	static parse(nodeString) {
 		return new Cluster(JSON.parse(nodeString));
-		
+
 		const defaultParams = { canBuild: 'true', arch: 'x86-64', target: 'avx2-i32x16', addressing: '32' };
 		const nodes = nodeString.split(",").map(s => s.replace(/\s+/, '')).filter(s => s !== '').map(n => {
 			var [url, ...paramList] = n.split(';');
@@ -91,7 +114,7 @@ class Cluster {
 
 	static expandParam(param) {
 		if ((/\.\./).test(param)) {
-			const [startStr, endStr, stepStr] = param.split(/\.\.\.?|,/);
+			const [startStr, endStr, stepStr] = param.split(/\.\.\.?|:/);
 			const step = stepStr ? Math.abs(parseFloat(stepStr)) : 1;
 			const start = parseFloat(startStr);
 			const end = parseFloat(endStr);
