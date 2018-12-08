@@ -68,6 +68,8 @@ class Cluster {
 	}
 
 	static parse(nodeString) {
+		return new Cluster(JSON.parse(nodeString));
+		
 		const defaultParams = { canBuild: 'true', arch: 'x86-64', target: 'avx2-i32x16', addressing: '32' };
 		const nodes = nodeString.split(",").map(s => s.replace(/\s+/, '')).filter(s => s !== '').map(n => {
 			var [url, ...paramList] = n.split(';');

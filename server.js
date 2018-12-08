@@ -8,6 +8,8 @@ const crypto = require('crypto');
 const { NodeVM } = require('vm2');
 const fs = require('fs');
 const os = require('os');
+const bonjour = require('bonjour')();
+const http = require('http');
 
 const { fork, execFile, execSync, execFileSync } = require('child_process');
 
@@ -21,21 +23,6 @@ app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x
 app.use('/monaco-editor/min/vs', express.static('node_modules/monaco-editor/min/vs'));
 
 app.use('/', express.static('html'));
-
-
-
-// Service discovery
-
-
-
-const bonjour = require('bonjour')();
-var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() })
-var browser = bonjour.find({ type: 'compute' }, (service) => {
-    console.log('up ' + service.host + ':' + service.port);
-});
-browser.on('down', (service) => {
-    console.log('down ' + service.host + ':' + service.port);
-});
 
 
 
@@ -209,6 +196,9 @@ nodeInfo.target = getTarget(nodeInfo);
 nodeInfo.threadCount = getThreadCount(nodeInfo);
 nodeInfo.memorySize = getMemorySize(nodeInfo);
 nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
+nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
+nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
+
 
 app.get('/info', (req, res) => {
     res.writeHead(200);
@@ -297,5 +287,90 @@ app.post('/signal/:pid/:signal', upload.none(), (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(`NodeVM server up on port ${port} @ ${Date.now()}`));
+const bodyAsBuffer = (req, cb) => {
+    var chunks = [];
+    req.on('data', b => chunks.push(b));
+    req.on('end', () => cb(Buffer.concat(chunks)));
+}
+const bodyAsString = (req, cb) => bodyAsBuffer(req, b => cb(b.toString()));
+
+const availableNodes = [];
+
+app.get('/nodes', (req, res) => {
+    res.end(JSON.stringify(availableNodes));
+});
+
+app.post('/nodes/add', (req, res) => {
+    bodyAsString(req, s => {
+        registerNode(JSON.parse(s))
+        res.end('ok');
+    });
+});
+
+
+
+
+// Service registration
+
+
+
+const pingNode = (service, ok, fail) => {
+    http.get('http://' + service.host + ':' + service.port + '/info', (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+            const info = JSON.parse(Buffer.concat(chunks).toString());
+            service.info = info;
+            if (ok) {
+                ok(service);
+            }
+        });
+        if (fail) {
+            res.on('error', fail);
+        }
+    });
+};
+
+const pruneNodes = () => {
+    setTimeout(pruneServices, 60000);
+    availableNodes.forEach(n => pingNode(n, null, () => unregisterNode(n)));
+}
+
+const registerNode = (service) => {
+    pingNode(service, s => availableNodes.push(s));
+};
+
+const unregisterNode = (service) => {
+    const idx = availableNodes.findIndex(n => n.name === service.name);
+    if (idx > -1) {
+        availableNodes.splice(idx, 1);
+    }
+};
+
+
+app.listen(port, () => {
+    console.log(`NodeVM server up on port ${port} @ ${Date.now()}`)
+
+
+
+    // Service discovery
+
+
+
+    var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() })
+    var browser = bonjour.find({ type: 'compute' }, (service) => {
+        console.log('up ' + service.host + ':' + service.port);
+        registerNode(service);
+    });
+    browser.on('down', (service) => {
+        console.log('down ' + service.host + ':' + service.port);
+        unregisterNode(service);
+    });
+
+    pruneNodes();
+
+});
+
+
+
 

@@ -61,3 +61,7 @@ require(['vs/editor/editor.main'], function () {
 window.onresize = function () {
 	window.vmsrcEditor.layout();
 };
+
+fetch('/nodes').then(res => res.json()).then(obj => {
+	window.getElementById('vmnodes').value = JSON.stringify(obj);
+});
