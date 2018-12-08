@@ -74,3 +74,19 @@ canvas {
 #output span:hover {
     white-space: pre-wrap;
 }
+
+#vmnodelist {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+#vmnodelist span {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    background: grey;
+    font-weight: bold;
+    color: white;
+    text-transform: uppercase;
+    font-size: 10px;
+}
