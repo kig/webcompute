@@ -50,6 +50,7 @@ p {
 canvas {
   max-width: 100%;
   margin-top: 10px;
+  display: block;
 }
 #container {
   width: 100%;
@@ -60,4 +61,16 @@ canvas {
 #output {
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    display: grid;
+    grid-template-columns: 33% 33% 33%;
+    grid-column-gap: 0.5%;
+}
+#output span {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    display: block;
+    overflow: hidden;
+}
+#output span:hover {
+    white-space: pre-wrap;
 }
