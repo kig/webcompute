@@ -361,18 +361,24 @@ const unregisterNode = (service) => {
     if (idx > -1) {
         console.log("Removed node ", service.host, service.port);
         availableNodes.splice(idx, 1);
+        var bidx = browser.services.indexOf(service);
+        if (bidx > -1) {
+            browser.services.splice(bidx, 1);
+        }
     }
 };
 
+var service, browser;
 
 app.listen(port, () => {
     console.log(`NodeVM server up on port ${port} @ ${Date.now()}`)
 
     // Service discovery
 
-    var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() });
-    var browser = bonjour.find({ type: 'compute' }, registerNode);
+    service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() });
+    browser = bonjour.find({ type: 'compute' }, registerNode);
     browser.on('down', unregisterNode);
+    setInterval(() => browser.update(), 10000);
 
     pruneNodes();
 
