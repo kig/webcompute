@@ -347,12 +347,19 @@ const pruneNodes = () => {
 }
 
 const registerNode = (service) => {
-    pingNode(service, s => availableNodes.push(s));
+    const idx = availableNodes.findIndex(n => n.name === service.name);
+    if (idx === -1) {
+        pingNode(service, s => {
+            console.log("Added node ", s.host, s.port);
+            availableNodes.push(s);
+        });
+    }
 };
 
 const unregisterNode = (service) => {
     const idx = availableNodes.findIndex(n => n.name === service.name);
     if (idx > -1) {
+        console.log("Removed node ", service.host, service.port);
         availableNodes.splice(idx, 1);
     }
 };
@@ -361,21 +368,11 @@ const unregisterNode = (service) => {
 app.listen(port, () => {
     console.log(`NodeVM server up on port ${port} @ ${Date.now()}`)
 
-
-
     // Service discovery
 
-
-
-    var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() })
-    var browser = bonjour.find({ type: 'compute' }, (service) => {
-        console.log('up ' + service.host + ':' + service.port);
-        registerNode(service);
-    });
-    browser.on('down', (service) => {
-        console.log('down ' + service.host + ':' + service.port);
-        unregisterNode(service);
-    });
+    var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() });
+    var browser = bonjour.find({ type: 'compute' }, registerNode);
+    browser.on('down', unregisterNode);
 
     pruneNodes();
 
