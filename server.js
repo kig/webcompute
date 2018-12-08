@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { NodeVM } = require('vm2');
 const fs = require('fs');
 const os = require('os');
-const dnssd = require('dnssd');
+const bonjour = require('bonjour')();
 const http = require('http');
 
 const { fork, execFile, execSync, execFileSync } = require('child_process');
@@ -298,7 +298,7 @@ const availableNodes = [];
 
 app.get('/nodes', (req, res) => {
     res.end(JSON.stringify(availableNodes.map(n => ({
-        url: 'http://' + n.addresses[0] + ':' + n.port,
+        url: 'http://' + n.host + ':' + n.port,
         info: n.info,
         addresses: n.addresses,
         name: n.name
@@ -327,7 +327,7 @@ const pingNode = (service, ok, fail) => {
             console.error(err);
         }
     };
-    http.get('http://' + service.addresses[0] + ':' + service.port + '/info', (res) => {
+    http.get('http://' + service.host + ':' + service.port + '/info', (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
         res.on('end', () => {
@@ -350,7 +350,7 @@ const registerNode = (service) => {
     const idx = availableNodes.findIndex(n => n.name === service.name);
     if (idx === -1) {
         pingNode(service, s => {
-            console.log("Added node ", s.name, s.port);
+            console.log("Added node ", s.host, s.port);
             availableNodes.push(s);
         });
     }
@@ -370,15 +370,12 @@ app.listen(port, () => {
 
     // Service discovery
 
-    var service = new dnssd.Advertisement(dnssd.tcp('compute'), port);
-    service.start();
-
-    var browser = new dnssd.Browser(dnssd.tcp('compute'));
-    browser.on('serviceUp', registerNode);
-    browser.on('serviceDown', unregisterNode);
-    browser.start();
+    var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() });
+    var browser = bonjour.find({ type: 'compute' }, registerNode);
+    browser.on('down', unregisterNode);
 
     pruneNodes();
+
 });
 
 
