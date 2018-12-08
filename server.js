@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { NodeVM } = require('vm2');
 const fs = require('fs');
 const os = require('os');
-const bonjour = require('bonjour')();
+const bonjour = require('bonjour')({ interface: '0.0.0.0' });
 const http = require('http');
 
 const { fork, execFile, execSync, execFileSync } = require('child_process');
