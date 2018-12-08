@@ -46,8 +46,8 @@ main_ispc(uniform float input[], uniform unsigned int8 output[]) {
 
     uniform float x0 = input[0];
     uniform float y0 = input[1];
-    uniform float x1 = input[2]; 
-    uniform float y1 = input[3];
+    uniform float x1 = x0+input[2]; 
+    uniform float y1 = y0+input[3];
     uniform int width = input[4];
     uniform int height = input[5];
     uniform int maxIterations = input[6];

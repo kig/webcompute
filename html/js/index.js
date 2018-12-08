@@ -62,6 +62,21 @@ window.onresize = function () {
 	window.vmsrcEditor.layout();
 };
 
+var addNode = function() {
+	if (window.event) {
+		window.event.preventDefault();
+	}
+
+	var host = window.addnode.value;
+	var url = 'http://' + host + ':7172';
+	fetch(url + '/info').then(res => res.json()).then(obj => {
+		var nodes = JSON.parse(document.getElementById('vmnodes').value);
+		nodes.push({url: url, info: obj});
+		document.getElementById('vmnodes').value = JSON.stringify(nodes);
+		updateVMNodes();
+	});
+};
+
 var updateVMNodes = function() {
 	var nodes = JSON.parse(document.getElementById('vmnodes').value);
 	var nodeList = document.getElementById('vmnodelist');
