@@ -14,7 +14,7 @@ ispc:
 	$(ISPC) $(FLAGS) -O2 targets/$(TARGET)/program.ispc -o targets/$(TARGET)/program.o
 
 link:
-	clang++ -Iobjs/ -O2 -m$(BITS) -o targets/$(TARGET)/program $(RUNNER) $(TASKSYS) targets/$(TARGET)/program.o -lm -lpthread -lstdc++
+	clang++ -Iobjs/ -O2 -m$(BITS) -o targets/$(TARGET)/program $(RUNNER) $(TASKSYS) targets/$(TARGET)/program.o -lm -lpthread -lstdc++ -lomp -fopenmp
 
 runner:
 	clang++ runner.cpp -Iobjs/ -O2 -m$(BITS) -c -o $(RUNNER)
