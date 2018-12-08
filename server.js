@@ -327,7 +327,7 @@ const pingNode = (service, ok, fail) => {
             console.error(err);
         }
     };
-    http.get('http://' + service.host + ':' + service.port + '/info', (res) => {
+    http.get('http://' + service.addresses[0] + ':' + service.port + '/info', (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
         res.on('end', () => {
