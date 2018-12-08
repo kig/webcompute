@@ -124,25 +124,25 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
     }
 });
 
-var getTarget = function(nodeInfo) {
+var getTarget = function (nodeInfo) {
     if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'arm') {
-	return 'neon-i32x4';
+        return 'neon-i32x4';
     }
     if (nodeInfo.arch === 'x86-64') {
-	if (nodeInfo.platform === 'linux') {
-	    var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
-	    if (keys.indexOf('avx2') > -1) {
-		return 'avx2-i32x8';
-	    } else if (keys.indexOf('avx') > -1) {
-		return 'avx1-i32x8';
-	    } else if (keys.indexOf('sse4_1') > -1 || keys.indexOf('sse4a') > -1) {
-		return 'sse4-i32x8';
-	    } else {
-		return 'sse2-i32x8';
-	    }
-	} else if (nodeInfo.platform === 'macos') {
-	    var keys = execSync(`sysctl -a | grep machdep.cpu | grep -o -E ' MMX\\S* | SSE\\S* | AVX\\S* '`).toString().toLowerCase().replace(/^\s+|\s+$/g, '').split(/\s+/);
-	    if (keys.indexOf('avx2') > -1) {
+        if (nodeInfo.platform === 'linux') {
+            var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
+            if (keys.indexOf('avx2') > -1) {
+                return 'avx2-i32x8';
+            } else if (keys.indexOf('avx') > -1) {
+                return 'avx1-i32x8';
+            } else if (keys.indexOf('sse4_1') > -1 || keys.indexOf('sse4a') > -1) {
+                return 'sse4-i32x8';
+            } else {
+                return 'sse2-i32x8';
+            }
+        } else if (nodeInfo.platform === 'macos') {
+            var keys = execSync(`sysctl -a | grep machdep.cpu | grep -o -E ' MMX\\S* | SSE\\S* | AVX\\S* '`).toString().toLowerCase().replace(/^\s+|\s+$/g, '').split(/\s+/);
+            if (keys.indexOf('avx2') > -1) {
                 return 'avx2-i32x8';
             } else if (keys.indexOf('avx1.0') > -1) {
                 return 'avx1-i32x8';
@@ -151,46 +151,46 @@ var getTarget = function(nodeInfo) {
             } else {
                 return 'sse2-i32x8';
             }
-	}
+        }
     }
     throw new Error("Unknown architecture");
 }
 
-var getThreadCount = function(nodeInfo) {
+var getThreadCount = function (nodeInfo) {
     if (nodeInfo.platform === 'linux') {
-	return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
+        return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
     } else if (nodeInfo.platform === 'macos') {
-	return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
+        return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
     }
     throw new Error("Unknown platform");
 }
 
-var getMemorySize = function(nodeInfo) {
+var getMemorySize = function (nodeInfo) {
     if (nodeInfo.platform === 'linux') {
-	return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
+        return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
     } else if (nodeInfo.platform === 'macos') {
-	return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
+        return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
     }
     throw new Error("Unknown platform");
 }
 
-var getCPUFreq = function(nodeInfo) {
+var getCPUFreq = function (nodeInfo) {
     if (nodeInfo.platform === 'linux') {
-	return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
+        return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
     } else {
-	var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
-	var freqs = [];
-	for (var i=0; i<nodeInfo.threadCount; i++) {
-	    freqs.push(freq);
-	}
-	return freqs;
+        var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
+        var freqs = [];
+        for (var i = 0; i < nodeInfo.threadCount; i++) {
+            freqs.push(freq);
+        }
+        return freqs;
     }
     return [];
 }
 
 var nodeInfo = {
     platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : 'macos',
-    arch: execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-')
+    arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
 };
 nodeInfo.target = getTarget(nodeInfo);
 nodeInfo.threadCount = getThreadCount(nodeInfo);
@@ -205,7 +205,7 @@ app.get('/info', (req, res) => {
     res.end(JSON.stringify(nodeInfo));
 });
 
-const runVM = function(instance, name, body, res) {
+const runVM = function (instance, name, body, res) {
     var time = Date.now();
 
     var ps = fork(instance, { stdio: 'pipe' });
@@ -229,10 +229,10 @@ const runVM = function(instance, name, body, res) {
 
 app.post('/new/:name?', (req, res) => {
     var chunks = [];
-    req.on('data', function(chunk) {
+    req.on('data', function (chunk) {
         chunks.push(chunk);
     });
-    req.on('end', function() {
+    req.on('end', function () {
         var buffer = Buffer.concat(chunks);
         runVM('./vm-instance', req.params.name, buffer, res);
     });
@@ -240,10 +240,10 @@ app.post('/new/:name?', (req, res) => {
 
 app.post('/build/:name?', (req, res) => {
     var chunks = [];
-    req.on('data', function(chunk) {
+    req.on('data', function (chunk) {
         chunks.push(chunk);
     });
-    req.on('end', function() {
+    req.on('end', function () {
         var buffer = Buffer.concat(chunks);
         runVM('./build-instance', 'build-' + req.params.name, buffer, res);
     });
@@ -320,6 +320,13 @@ app.post('/nodes/add', (req, res) => {
 
 
 const pingNode = (service, ok, fail) => {
+    const onError = (err) => {
+        if (fail) {
+            fail(err);
+        } else {
+            console.error(err);
+        }
+    };
     http.get('http://' + service.host + ':' + service.port + '/info', (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
@@ -330,10 +337,8 @@ const pingNode = (service, ok, fail) => {
                 ok(service);
             }
         });
-        if (fail) {
-            res.on('error', fail);
-        }
-    });
+        res.on('error', onError);
+    }).on('error', onError);
 };
 
 const pruneNodes = () => {
