@@ -7,6 +7,7 @@ const upload = multer();
 const crypto = require('crypto');
 const { NodeVM } = require('vm2');
 const fs = require('fs');
+const os = require('os');
 
 const { fork, execFile, execSync, execFileSync } = require('child_process');
 
@@ -20,6 +21,27 @@ app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x
 app.use('/monaco-editor/min/vs', express.static('node_modules/monaco-editor/min/vs'));
 
 app.use('/', express.static('html'));
+
+
+
+// Service discovery
+
+
+
+const bonjour = require('bonjour')();
+var service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() })
+var browser = bonjour.find({ type: 'compute' }, (service) => {
+    console.log('up ' + service.host + ':' + service.port);
+});
+browser.on('down', (service) => {
+    console.log('down ' + service.host + ':' + service.port);
+});
+
+
+
+// Main app
+
+
 
 var vmuid = 0;
 
