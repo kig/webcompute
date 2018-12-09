@@ -33,7 +33,7 @@ try {
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
-        const arch = args.arch.test(/^arm/) ? 'arm' : args.arch;
+        const arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
         const bits = arch === 'arm' ? '32' : '64';
         const ispc = args.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
         fs.writeFileSync(`./targets/${target}/program.ispc`, program);

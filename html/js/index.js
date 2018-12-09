@@ -82,9 +82,6 @@ var addNode = function() {
 	var host = window.addnode.value;
 	var url = 'http://' + host + ':7172';
 	fetch(url + '/nodes').then(res => res.json()).then(addNodes);
-	fetch(url + '/info').then(res => res.json()).then(obj => {
-		addNodes([{url: url, info: obj}]);
-	});
 };
 
 var updateVMNodes = function() {

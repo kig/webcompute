@@ -31,7 +31,7 @@ try {
     var cpusig;
     var platform = 'linux';
     var arch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
-    if (arch.test(/^arm/)) {
+    if (/^arm/.test(arch)) {
         arch = 'arm';
     }
     if (fs.existsSync('/proc/cpuinfo')) {
