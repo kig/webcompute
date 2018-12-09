@@ -33,7 +33,8 @@ try {
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
-        const bits = args.arch === 'arm' ? '32' : '64';
+        const arch = args.arch.test(/^arm/) ? 'arm' : args.arch;
+        const bits = arch === 'arm' ? '32' : '64';
         const ispc = args.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
         fs.writeFileSync(`./targets/${target}/program.ispc`, program);
         execFileSync('/usr/bin/make', [
@@ -41,8 +42,8 @@ try {
             `ISPC=${ispc}`, 
             `BITS=${bits}`,
             `PLATFORM=${args.platform}`,
-            `ARCH=${args.arch}`,
-            `FLAGS=--arch=${args.arch} --target=${args.target} --addressing=${args.addressing}`,
+            `ARCH=${arch}`,
+            `FLAGS=--arch=${arch} --target=${args.target} --addressing=${args.addressing}`,
             `TARGET=${target}`
         ]);
     }

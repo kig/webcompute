@@ -31,6 +31,9 @@ try {
     var cpusig;
     var platform = 'linux';
     var arch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+    if (arch.test(/^arm/)) {
+        arch = 'arm';
+    }
     if (fs.existsSync('/proc/cpuinfo')) {
         cpusig = 'linux-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
     } else if (fs.existsSync('/Library/ColorSync')) {
