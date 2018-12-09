@@ -298,7 +298,7 @@ const availableNodes = [];
 
 app.get('/nodes', (req, res) => {
     res.end(JSON.stringify(availableNodes.map(n => ({
-        url: 'http://' + n.host + ':' + n.port,
+        url: n.url,
         info: n.info,
         addresses: n.addresses,
         name: n.name
@@ -327,7 +327,7 @@ const pingNode = (service, ok, fail) => {
             console.error(err);
         }
     };
-    http.get('http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port + '/info', (res) => {
+    http.get(service.url + '/info', (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
         res.on('end', () => {
@@ -347,19 +347,21 @@ const pruneNodes = () => {
 }
 
 const registerNode = (service) => {
-    const idx = availableNodes.findIndex(n => n.name === service.name);
+    service.url = 'http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port;
+    const idx = availableNodes.findIndex(n => n.url === service.url);
     if (idx === -1) {
         pingNode(service, s => {
-            console.log("Added node ", s.host, s.port);
+            console.log("Added node ", s.url);
             availableNodes.push(s);
         });
     }
 };
 
 const unregisterNode = (service) => {
-    const idx = availableNodes.findIndex(n => n.name === service.name);
+    service.url = 'http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port;
+    const idx = availableNodes.findIndex(n => n.url === service.url);
     if (idx > -1) {
-        console.log("Removed node ", service.host, service.port);
+        console.log("Removed node ", service.url);
         availableNodes.splice(idx, 1);
         var bidx = browser.services.indexOf(service);
         if (bidx > -1) {
