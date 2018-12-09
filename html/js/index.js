@@ -62,6 +62,18 @@ window.onresize = function () {
 	window.vmsrcEditor.layout();
 };
 
+var addNodes = function(nodeList) {
+	var nodes = JSON.parse(document.getElementById('vmnodes').value || '[]');
+	var hosts = {}
+	nodes.map(n => hosts[n.url] = true);
+	newNodes = nodeList.filter(n => !hosts[n.url]);
+	if (newNodes.length > 0) {
+		nodes = nodes.concat(newNodes);
+		document.getElementById('vmnodes').value = JSON.stringify(nodes);
+		updateVMNodes();
+	}
+}
+
 var addNode = function() {
 	if (window.event) {
 		window.event.preventDefault();
@@ -69,11 +81,9 @@ var addNode = function() {
 
 	var host = window.addnode.value;
 	var url = 'http://' + host + ':7172';
+	fetch(url + '/nodes').then(res => res.json()).then(addNodes);
 	fetch(url + '/info').then(res => res.json()).then(obj => {
-		var nodes = JSON.parse(document.getElementById('vmnodes').value);
-		nodes.push({url: url, info: obj});
-		document.getElementById('vmnodes').value = JSON.stringify(nodes);
-		updateVMNodes();
+		addNodes([{url: url, info: obj}]);
 	});
 };
 
@@ -88,7 +98,4 @@ var updateVMNodes = function() {
 	});
 };
 
-fetch('/nodes').then(res => res.json()).then(obj => {
-	document.getElementById('vmnodes').value = JSON.stringify(obj);
-	updateVMNodes();
-});
+fetch('/nodes').then(res => res.json()).then(addNodes);

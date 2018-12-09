@@ -125,7 +125,7 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
 });
 
 var getTarget = function (nodeInfo) {
-    if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'arm') {
+    if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'armv7l') {
         return 'neon-i32x4';
     }
     if (nodeInfo.arch === 'x86-64') {
@@ -327,7 +327,7 @@ const pingNode = (service, ok, fail) => {
             console.error(err);
         }
     };
-    http.get('http://' + service.addresses[0] + ':' + service.port + '/info', (res) => {
+    http.get('http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port + '/info', (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
         res.on('end', () => {
