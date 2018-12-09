@@ -35,10 +35,13 @@ try {
         arch = 'arm';
     }
     if (fs.existsSync('/proc/cpuinfo')) {
-        cpusig = 'linux-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
+        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+            platform = 'android';
+        }
+        cpusig = platform + '-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
     } else if (fs.existsSync('/Library/ColorSync')) {
         platform = 'macos';
-        cpusig = 'macos-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
+        cpusig = platform + '-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
     } else {
         throw new Error("Unknown platform");
     }
@@ -56,15 +59,19 @@ try {
                 `TARGET=${target}`,
                 `PLATFORM=${platform}`,
                 `ARCH=${arch}`,
+                `MY_PLATFORM=${platform}`,
+                `MY_ARCH=${arch}`,
                 `link`
             ]);
         } else {
             fs.writeFileSync(`./targets/${target}/program.ispc`, program);
             execFileSync('/usr/bin/make', [
-                `TARGET=${target}`, 
+                `TARGET=${target}`,
                 `PLATFORM=${platform}`,
                 `ARCH=${arch}`,
-                `ispc`, 
+                `MY_PLATFORM=${platform}`,
+                `MY_ARCH=${arch}`,
+                `ispc`,
                 `link`
             ]);
         }
@@ -72,7 +79,9 @@ try {
 
     fs.writeFileSync(`./targets/${target}/input`, Buffer.from(programInput));
 
-    const output = execFileSync(`./targets/${target}/program`, [], { input: Buffer.from(programInput) });
+    // Set OMP_NUM_THREADS=32 for Android targets
+
+    const output = execFileSync(`./targets/${target}/program`, [], { input: Buffer.from(programInput), env: {'OMP_NUM_THREADS': '32'} });
 
     var t1 = Date.now();
 

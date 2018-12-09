@@ -24,6 +24,20 @@ const program = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
 const startTime = info.time;
 
 try {
+    var myPlatform = 'linux';
+    var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+    if (/^arm/.test(arch)) {
+        myArch = 'arm';
+    }
+    if (fs.existsSync('/proc/cpuinfo')) {
+        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+            myPlatform = 'android';
+        }
+    } else if (fs.existsSync('/Library/ColorSync')) {
+        myPlatform = 'macos';
+    } else {
+        throw new Error("Unknown platform");
+    }
 
     var target = args.platform + "-" + args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
@@ -42,6 +56,8 @@ try {
             `ISPC=${ispc}`, 
             `BITS=${bits}`,
             `PLATFORM=${args.platform}`,
+            `MY_PLATFORM=${myPlatform}`,
+            `MY_ARCH=${myArch}`,
             `ARCH=${arch}`,
             `FLAGS=--arch=${arch} --target=${args.target} --addressing=${args.addressing}`,
             `TARGET=${target}`

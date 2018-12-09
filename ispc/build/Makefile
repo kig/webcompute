@@ -2,8 +2,11 @@ ISPC=ispc
 FLAGS=
 TARGET=kernel
 BITS=64
-ARCH=default
-PLATFORM=default
+ARCH=x86-64
+PLATFORM=linux
+
+MY_ARCH=x86-64
+MY_PLATFORM=linux
 
 RUNNER=objs/runner-$(PLATFORM)-$(ARCH).o
 TASKSYS=objs/tasksys-$(PLATFORM)-$(ARCH).o
@@ -11,15 +14,24 @@ TASKSYS=objs/tasksys-$(PLATFORM)-$(ARCH).o
 FOMP=
 OMP=
 
-ifeq ($(PLATFORM),aarch64)
-	FOMP=-fopenmp
-	OMP=-lomp $(FOMP)
+ifeq ($(ARCH),aarch64)
+	ifeq ($(PLATFORM),android)
+		# Android Termux, use OpenMP since pthreads semaphores are missing
+		FOMP=-fopenmp
+		OMP=-lomp $(FOMP)
+	endif
+endif
+
+ifeq ($(ARCH),arm)
+	# Raspberry Pi settings
+	OMP=-stdlib=libc++ -lunwind -mfloat-abi=hard
+	BITS=32
 endif
 
 default: ispc link
 
 ispc:
-	../$(ISPC) $(FLAGS) -O2 targets/$(TARGET)/program.ispc -o targets/$(TARGET)/program.o
+	../$(ISPC)-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/program.ispc -o targets/$(TARGET)/program.o
 
 link:
 	clang++ -Iobjs/ -O2 -m$(BITS) -o targets/$(TARGET)/program $(RUNNER) $(TASKSYS) targets/$(TARGET)/program.o -lm -lpthread -lstdc++ $(OMP)
