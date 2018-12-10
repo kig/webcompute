@@ -1,10 +1,10 @@
 class Cluster {
+
 	constructor(nodes) {
 		this.buildNodes = nodes.filter(n => n.info.canBuild);
 		this.nodes = nodes;
 		this.availableNodes = nodes.slice();
 		this.workQueue = [];
-		this.buildCache = {};
 	}
 
 	processWorkQueue() {
@@ -36,21 +36,27 @@ class Cluster {
 		} else {
 			const vmSuffix = '/build/' + name;
 			const args = { platform: node.info.platform, arch: node.info.arch, target: node.info.target, addressing: 32 };
-			const buildNode = this.buildNodes.find(bn => {
-				return (
-					bn.info.platform === args.platform &&
-					(bn.info.canCrossCompile || bn.info.arch === args.arch)
-				);
-			});
-			if (!buildNode) {
-				return false;
+			var key = await sha256(JSON.stringify({...args, source: source}));
+			if (!Cluster.buildCache[key]) {
+				Cluster.buildCache[key] = new Promise(async (resolve, reject) => {
+					const buildNode = this.buildNodes.find(bn => {
+						return (
+							bn.info.platform === args.platform &&
+							(bn.info.canCrossCompile || bn.info.arch === args.arch)
+						);
+					});
+					if (!buildNode) {
+						resolve(false);
+					}
+					const bin = JSON.stringify(source);
+					const body = new Blob([ JSON.stringify(args), '\n', bin ]);
+					const url = buildNode.url + vmSuffix;
+					const res = await fetch(url, { method: 'POST', body });
+					const blob = await Cluster.responseToBlob(res);
+					resolve({ blob, isBinary: true });
+				});
 			}
-			const bin = JSON.stringify(source);
-			const body = new Blob([ JSON.stringify(args), '\n', bin ]);
-			const url = buildNode.url + vmSuffix;
-			const res = await fetch(url, { method: 'POST', body });
-			const blob = await Cluster.responseToBlob(res);
-			return { blob, isBinary: true };
+			return Cluster.buildCache[key];
 		}
 	}
 
@@ -251,3 +257,5 @@ class Cluster {
 		});
 	}
 }
+
+Cluster.buildCache = {};

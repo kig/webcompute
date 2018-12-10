@@ -51,10 +51,11 @@ function processResponse(arrayBuffer, output, outputType, outputWidth, outputHei
 window.vmsrcEditor = null;
 require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
-	window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
-		value: [
-		].join('\\n'),
-		language: 'c'
+	fetch('examples/mandel.ispc').then(res => res.text()).then(text => {
+		window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
+			value: text,
+			language: 'c'
+		});
 	});
 });
 
@@ -62,7 +63,7 @@ window.onresize = function () {
 	window.vmsrcEditor.layout();
 };
 
-var addNodes = function(nodeList) {
+var addNodes = function (nodeList) {
 	var nodes = JSON.parse(document.getElementById('vmnodes').value || '[]');
 	var hosts = {}
 	nodes.map(n => hosts[n.url] = true);
@@ -74,7 +75,7 @@ var addNodes = function(nodeList) {
 	}
 }
 
-var addNode = function() {
+var addNode = function () {
 	if (window.event) {
 		window.event.preventDefault();
 	}
@@ -84,7 +85,7 @@ var addNode = function() {
 	fetch(url + '/nodes').then(res => res.json()).then(addNodes);
 };
 
-var updateVMNodes = function() {
+var updateVMNodes = function () {
 	var nodes = JSON.parse(document.getElementById('vmnodes').value);
 	var nodeList = document.getElementById('vmnodelist');
 	nodeList.innerHTML = '';
