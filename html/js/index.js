@@ -11,13 +11,18 @@ function send() {
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		async onResponse(res) {
+		async onResponse(res, input, runJob) {
 			const output = document.createElement('span');
 			document.getElementById('output').append(output);
 			const arrayBuffer = await Cluster.responseToArrayBuffer(res, (header) => {
 				output.textContent = JSON.stringify(header);
 			});
-			processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight);
+			if (arrayBuffer.header.type === 'error') {
+				output.remove();
+				runJob(input);
+			} else {
+				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight);
+			}
 		}
 	});
 }

@@ -88,8 +88,14 @@ class Cluster {
 				const bin = program.blob;
 				const body = new Blob([ JSON.stringify(args), '\n', bin ]);
 				const url = node.url + vmSuffix;
-				const res = await fetch(url, { method: 'POST', body });
-				return onResponse(res);
+				var res;
+				try {
+					res = await fetch(url, { method: 'POST', body });
+				} catch(e) {
+					cluster.disableNode(node);
+					runJob(input);
+				}
+				return onResponse(res, input, runJob);
 			});
 		};
 		inputs.forEach(runJob);
