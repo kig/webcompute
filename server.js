@@ -293,6 +293,7 @@ const bodyAsBuffer = (req, cb) => {
     req.on('end', () => cb(Buffer.concat(chunks)));
 }
 const bodyAsString = (req, cb) => bodyAsBuffer(req, b => cb(b.toString()));
+const bodyAsJson = (req, cb) => bodyAsString(req, s => cb(JSON.parse(s)));
 
 const availableNodes = [];
 
@@ -317,9 +318,18 @@ app.post('/nodes/add', (req, res) => {
 
 // Service registration
 
+/*
+    Service discovery protocol:
+        1. Advertise on mdns
+        2. On receiving an advertisement (or manually adding a node), process the node
+            a. node/info - Connect to the advertised node to get its details
+            b. node/nodes - Fetch the list of nodes known to the advertised node
+            c. Add the list of nodes to known nodes
+        3. Process known nodes list in the background
+*/
 
 
-const pingNode = (service, ok, fail) => {
+const fetchJson = (url, ok, fail) => {
     const onError = (err) => {
         if (fail) {
             fail(err);
@@ -327,39 +337,54 @@ const pingNode = (service, ok, fail) => {
             console.error(err);
         }
     };
-    http.get(service.url + '/info', (res) => {
-        const chunks = [];
-        res.on('data', c => chunks.push(c));
-        res.on('end', () => {
-            const info = JSON.parse(Buffer.concat(chunks).toString());
-            service.info = info;
-            if (ok) {
-                ok(service);
-            }
-        });
+    http.get(url, (res) => {
+        bodyAsJson(res, ok);
         res.on('error', onError);
     }).on('error', onError);
 };
 
-const pruneNodes = () => {
-    setTimeout(pruneNodes, 60000);
-    availableNodes.forEach(n => pingNode(n, null, () => unregisterNode(n)));
+const pingNode = (service, ok, fail) => {
+    fetchJson(service.url + '/info', (info) => {
+        service.info = info;
+        if (ok) {
+            ok(service);
+        }
+    }, fail);
+};
+
+const fetchNodes = (service, ok, fail) => {
+    fetchJson(service.url + '/nodes', (nodes) => {
+        nodes.forEach(registerNode);
+        if (ok) {
+            ok(nodes);
+        }
+    }, fail);
+};
+
+const updateNodes = () => {
+    setTimeout(updateNodes, 10000);
+    availableNodes.forEach(n => fetchNodes(n, null, () => unregisterNode(n)));
 }
 
-const registerNode = (service) => {
-    service.url = 'http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port;
-    const idx = availableNodes.findIndex(n => n.url === service.url);
-    if (idx === -1) {
+const getServiceURL = (service) => 'http://' + service.addresses.find(addr => /^(192\.168\.|10\.)/.test(addr)) + ':' + service.port;
+const parseService = (service) => ({ ...service, url: service.url || getServiceURL(service) });
+
+const serviceIndex = (service) => availableNodes.findIndex(n => n.url === service.url);
+
+const registerNode = (rawService) => {
+    const service = parseService(rawService);
+    if (serviceIndex(service) === -1) {
         pingNode(service, s => {
             console.log("Added node ", s.url);
             availableNodes.push(s);
+            fetchNodes(s);
         });
     }
 };
 
 const unregisterNode = (service) => {
-    service.url = 'http://' + service.addresses.find(addr => /^(192|10)/.test(addr)) + ':' + service.port;
-    const idx = availableNodes.findIndex(n => n.url === service.url);
+    service.url = getServiceURL(service);
+    const idx = serviceIndex(service);
     if (idx > -1) {
         console.log("Removed node ", service.url);
         availableNodes.splice(idx, 1);
@@ -377,12 +402,12 @@ app.listen(port, () => {
 
     // Service discovery
 
-    service = bonjour.publish({ name: 'Compute Worker ' + os.hostname(), type: 'compute', port: port.toString() });
+    service = bonjour.publish({ name: 'Compute Worker ' + os.hostname() + " " + Date.now(), type: 'compute', port: port.toString() });
     browser = bonjour.find({ type: 'compute' }, registerNode);
     browser.on('down', unregisterNode);
     setInterval(() => browser.update(), 10000);
 
-    pruneNodes();
+    updateNodes();
 
 });
 
