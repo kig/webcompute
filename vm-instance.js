@@ -81,7 +81,7 @@ try {
 
     // Set OMP_NUM_THREADS=32 for Android targets
 
-    const output = execFileSync(`./targets/${target}/program`, [], { input: Buffer.from(programInput), env: {'OMP_NUM_THREADS': '32'} });
+    const output = execFileSync(`./targets/${target}/program`, [], { input: Buffer.from(programInput), env: {...process.env, 'OMP_NUM_THREADS': '32'} });
 
     var t1 = Date.now();
 
