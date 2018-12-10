@@ -49,7 +49,7 @@ try {
         }
         const arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
         const bits = arch === 'arm' ? '32' : '64';
-        const ispc = args.arch === 'aarch64' ? 'ispc-aarch64' : 'ispc';
+        const ispc = 'ispc';
         fs.writeFileSync(`./targets/${target}/program.ispc`, program);
         execFileSync('/usr/bin/make', [
             'ispc',
