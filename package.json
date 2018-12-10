@@ -13,6 +13,9 @@
     "vm2": "^3.6.4"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "nodemon server.js"
+  },
+  "devDependencies": {
+    "nodemon": "^1.18.7"
   }
 }
