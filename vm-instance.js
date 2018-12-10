@@ -91,6 +91,8 @@ try {
 
 } catch (e) {
 
+    process.stdout.write("error\n");
+
     sendResult(e.stack.toString());
 
 }

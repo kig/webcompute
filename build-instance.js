@@ -12,38 +12,39 @@ function sendResult(result) {
     }
 }
 
-const stdinBuffer = fs.readFileSync(0);
-const firstLine = stdinBuffer.indexOf(10);
-const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
-const infoString = stdinBuffer.slice(0, firstLine).toString();
-const info = JSON.parse(infoString);
-const argsString = stdinBuffer.slice(firstLine + 1, secondLine).toString();
-const args = JSON.parse(argsString);
-const program = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
-
-const startTime = info.time;
-
 try {
-    var myPlatform = 'linux';
-    var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
-    if (/^arm/.test(myArch)) {
-        myArch = 'arm';
-    }
-    if (fs.existsSync('/proc/cpuinfo')) {
-        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
-            myPlatform = 'android';
-        }
-    } else if (fs.existsSync('/Library/ColorSync')) {
-        myPlatform = 'macos';
-    } else {
-        throw new Error("Unknown platform");
-    }
 
+    const stdinBuffer = fs.readFileSync(0);
+    const firstLine = stdinBuffer.indexOf(10);
+    const secondLine = stdinBuffer.indexOf(10, firstLine + 1);
+    const infoString = stdinBuffer.slice(0, firstLine).toString();
+    const info = JSON.parse(infoString);
+    const argsString = stdinBuffer.slice(firstLine + 1, secondLine).toString();
+    const args = JSON.parse(argsString);
+    const program = JSON.parse(stdinBuffer.slice(secondLine + 1).toString());
+    
+    const startTime = info.time;
+    
     var target = args.platform + "-" + args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
     process.chdir('./ispc/build');
 
-    if (!fs.existsSync(`./targets/${target}/program`)) {
+    if (!fs.existsSync(`./targets/${target}/program.o`)) {
+        var myPlatform = 'linux';
+        var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+        if (/^arm/.test(myArch)) {
+            myArch = 'arm';
+        }
+        if (fs.existsSync('/proc/cpuinfo')) {
+            if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+                myPlatform = 'android';
+            }
+        } else if (fs.existsSync('/Library/ColorSync')) {
+            myPlatform = 'macos';
+        } else {
+            throw new Error("Unknown platform");
+        }
+
         if (!fs.existsSync(`./targets/${target}`)) {
             execFileSync('mkdir', ['-p', `./targets/${target}`]);
         }
@@ -74,6 +75,7 @@ try {
 
 } catch (e) {
 
+    process.stdout.write("error\n");
     sendResult(e.stack.toString());
 
 }
