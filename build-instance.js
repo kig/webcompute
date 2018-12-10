@@ -26,7 +26,7 @@ const startTime = info.time;
 try {
     var myPlatform = 'linux';
     var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
-    if (/^arm/.test(arch)) {
+    if (/^arm/.test(myArch)) {
         myArch = 'arm';
     }
     if (fs.existsSync('/proc/cpuinfo')) {

@@ -375,9 +375,11 @@ const registerNode = (rawService) => {
     const service = parseService(rawService);
     if (serviceIndex(service) === -1) {
         pingNode(service, s => {
-            console.log("Added node ", s.url);
-            availableNodes.push(s);
-            fetchNodes(s);
+            if (serviceIndex(service) === -1) {
+                console.log("Added node ", s.url);
+                availableNodes.push(s);
+                fetchNodes(s);
+            }
         });
     }
 };
@@ -396,6 +398,17 @@ const unregisterNode = (service) => {
 };
 
 var service, browser;
+
+if (process.argv.length > 2) {
+    process.argv.slice(2).forEach(host => {
+        registerNode({
+            url: 'http://' + host + ':' + 7172,
+            host: host,
+            port: 7172,
+            addresses: [host]
+        });
+    });
+}
 
 app.listen(port, () => {
     console.log(`NodeVM server up on port ${port} @ ${Date.now()}`)
