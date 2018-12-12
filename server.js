@@ -275,7 +275,7 @@ const runVM_ = function (name, body, res) {
                     `MY_PLATFORM=${BuildTarget.platform}`,
                     `MY_ARCH=${BuildTarget.arch}`,
                     `link`
-                ], {cwd: './ispc/build'});
+                ], { cwd: './ispc/build' });
             } else {
                 fs.writeFileSync(`./ispc/build/targets/${target}/program.ispc`, program);
                 execFileSync('/usr/bin/make', [
@@ -286,23 +286,27 @@ const runVM_ = function (name, body, res) {
                     `MY_ARCH=${BuildTarget.arch}`,
                     `ispc`,
                     `link`
-                ], {cwd: './ispc/build'});
+                ], { cwd: './ispc/build' });
             }
         }
 
         fs.writeFileSync(`./ispc/build/targets/${target}/input`, Buffer.from(programInput));
 
-        // Set OMP_NUM_THREADS=8 for Android targets
-
-        const ps = execFile(`./targets/${target}/program`, [], { encoding: 'buffer', stdio: ['pipe', 'pipe', 'inherit'], maxBuffer: Infinity, env: { ...process.env, 'OMP_NUM_THREADS': '8' }, cwd: './ispc/build'});
-
+        const ps = execFile(`./targets/${target}/program`, [], {
+            encoding: 'buffer',
+            stdio: ['pipe', 'pipe', 'inherit'],
+            maxBuffer: Infinity,
+            // Set OMP_NUM_THREADS=8 for Android targets
+            env: { ...process.env, 'OMP_NUM_THREADS': '8' },
+            cwd: './ispc/build'
+        });
         ps.name = findName(name);
         Object.defineProperty(ps, 'status', { get: getStatus });
 
         processes[ps.pid] = ps;
         processesByName[ps.name] = ps;
         ps.on('exit', (code, signal) => {
-            process.stderr.write('Exit: ' + code + ' ' + signal + '\n')
+            // process.stderr.write('Exit: ' + code + ' ' + signal + '\n')
             delete processes[ps.pid];
             delete processesByName[ps.name];
         });
@@ -320,7 +324,7 @@ const runVM_ = function (name, body, res) {
 
         ps.stdin.write(Buffer.from(programInput));
         ps.stdin.end();
-        
+
     } catch (e) {
 
         res.write("error\n");
