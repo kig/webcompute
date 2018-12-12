@@ -205,6 +205,131 @@ app.get('/info', (req, res) => {
     res.end(JSON.stringify(nodeInfo));
 });
 
+
+const getBuildTarget = () => {
+    var cpusig;
+    var platform = 'linux';
+    var arch = execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-');
+    if (/^arm/.test(arch)) {
+        arch = 'arm';
+    }
+    if (fs.existsSync('/proc/cpuinfo')) {
+        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+            platform = 'android';
+        }
+        cpusig = platform + '-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
+    } else if (fs.existsSync('/Library/ColorSync')) {
+        platform = 'macos';
+        cpusig = platform + '-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
+    } else {
+        throw new Error("Unknown platform");
+    }
+    return {
+        cpusig: cpusig,
+        platform: platform,
+        arch: arch
+    };
+};
+
+const BuildTarget = getBuildTarget();
+
+const runVM_ = function (name, body, res) {
+    function sendResult(result) {
+        try {
+            res.write(result);
+        } catch (err) {
+            res.write('error\n');
+            res.write(err.stack.toString());
+            res.end();
+        }
+    }
+
+    var time = Date.now();
+
+    try {
+        const firstLine = body.indexOf(10);
+        const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
+        const program = body.slice(firstLine + 1);
+
+        const programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
+        const i32 = new Int32Array(programInput, 0, 1);
+        i32[0] = programInputObj.outputLength;
+        const f32 = new Float32Array(programInput, 4);
+        f32.set(programInputObj.input);
+
+        var programHash = crypto.createHash('sha256').update(program).digest('hex');
+        var target = BuildTarget.cpusig + '/' + programHash;
+
+        if (!fs.existsSync(`./ispc/build/targets/${target}/program`)) {
+            if (!fs.existsSync(`./ispc/build/targets/${target}`)) {
+                execFileSync('mkdir', ['-p', `./ispc/build/targets/${target}`]);
+            }
+            if (programInputObj.executable) {
+                fs.writeFileSync(`./ispc/build/targets/${target}/program`, program);
+            } else if (programInputObj.binary) {
+                fs.writeFileSync(`./ispc/build/targets/${target}/program.o`, program);
+                execFileSync('/usr/bin/make', [
+                    `TARGET=${target}`,
+                    `PLATFORM=${BuildTarget.platform}`,
+                    `ARCH=${BuildTarget.arch}`,
+                    `MY_PLATFORM=${BuildTarget.platform}`,
+                    `MY_ARCH=${BuildTarget.arch}`,
+                    `link`
+                ], {cwd: './ispc/build'});
+            } else {
+                fs.writeFileSync(`./ispc/build/targets/${target}/program.ispc`, program);
+                execFileSync('/usr/bin/make', [
+                    `TARGET=${target}`,
+                    `PLATFORM=${BuildTarget.platform}`,
+                    `ARCH=${BuildTarget.arch}`,
+                    `MY_PLATFORM=${BuildTarget.platform}`,
+                    `MY_ARCH=${BuildTarget.arch}`,
+                    `ispc`,
+                    `link`
+                ], {cwd: './ispc/build'});
+            }
+        }
+
+        fs.writeFileSync(`./ispc/build/targets/${target}/input`, Buffer.from(programInput));
+
+        // Set OMP_NUM_THREADS=8 for Android targets
+
+        const ps = execFile(`./targets/${target}/program`, [], { encoding: 'buffer', stdio: ['pipe', 'pipe', 'inherit'], maxBuffer: Infinity, env: { ...process.env, 'OMP_NUM_THREADS': '8' }, cwd: './ispc/build'});
+
+        ps.name = findName(name);
+        Object.defineProperty(ps, 'status', { get: getStatus });
+
+        processes[ps.pid] = ps;
+        processesByName[ps.name] = ps;
+        ps.on('exit', (code, signal) => {
+            process.stderr.write('Exit: ' + code + ' ' + signal + '\n')
+            delete processes[ps.pid];
+            delete processesByName[ps.name];
+        });
+        ps.on('close', () => res.end());
+        ps.imageHash = programHash;
+
+        res.writeHead(200);
+        res.write(JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time }) + '\n');
+        res.write("application/octet-stream\n");
+
+        ps.stdout.encoding
+
+        ps.stdout.on('data', (msg) => res.write(msg));
+        ps.stdout.on('close', () => res.end());
+
+        ps.stdin.write(Buffer.from(programInput));
+        ps.stdin.end();
+        
+    } catch (e) {
+
+        res.write("error\n");
+        sendResult(e.stack.toString());
+        res.end();
+
+    }
+};
+
 const runVM = function (instance, name, body, res) {
     var time = Date.now();
 
@@ -227,27 +352,13 @@ const runVM = function (instance, name, body, res) {
     ps.stdout.on('data', (msg) => res.write(msg));
 }
 
-app.post('/new/:name?', (req, res) => {
-    var chunks = [];
-    req.on('data', function (chunk) {
-        chunks.push(chunk);
-    });
-    req.on('end', function () {
-        var buffer = Buffer.concat(chunks);
-        runVM('./vm-instance', req.params.name, buffer, res);
-    });
-});
+app.post('/new/:name?', (req, res) =>
+    bodyAsBuffer(req, buffer => runVM_(req.params.name, buffer, res))
+);
 
-app.post('/build/:name?', (req, res) => {
-    var chunks = [];
-    req.on('data', function (chunk) {
-        chunks.push(chunk);
-    });
-    req.on('end', function () {
-        var buffer = Buffer.concat(chunks);
-        runVM('./build-instance', 'build-' + req.params.name, buffer, res);
-    });
-});
+app.post('/build/:name?', (req, res) =>
+    bodyAsBuffer(req, buffer => runVM('./build-instance', 'build-' + req.params.name, buffer, res))
+);
 
 app.get('/list', (req, res) => {
     res.send(
