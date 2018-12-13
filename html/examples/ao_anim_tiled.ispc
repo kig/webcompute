@@ -1,0 +1,1030 @@
+/*
+    HLSL-to-ISPC Utility Library
+    https://github.com/zigguratvertigo/ispc-hlsl
+    
+    This file contains helper functions to ease the transition of HLSL code to ISPC.
+    Implements basic HLSL types and intrinsics (https://msdn.microsoft.com/en-us/library/windows/desktop/ff471376(v=vs.85).aspx).
+    Also not meant to be the most optimal *yet*, but rather good-enough to allow for HLSL-like functionality
+    in ISPC. Still work in progress. More functionality to be added and overall behaviour to be improved.
+    
+    MIT License
+    
+    Copyright (c) 2017 Colin Barr�-Brisebois
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+
+//-------------------------------------------------------------------------------------------------
+// TYPES
+//-------------------------------------------------------------------------------------------------
+
+// Vector
+typedef float<2> float2;
+typedef float<3> float3;
+typedef float<4> float4;
+typedef int<2>   int2;
+typedef int<3>   int3;
+typedef int<4>   int4;
+typedef bool<2>  bool2;
+typedef bool<3>  bool3;
+typedef bool<4>  bool4;
+
+// Matrix
+struct float2x2 { float<2> m[2]; };
+struct float3x3 { float<3> m[3]; };
+struct float4x4 { float<4> m[4]; };
+
+
+//---------------------------------------------------------------------------------------------------------------------
+// CONSTRUCTORS
+// Until https://github.com/ispc/ispc/issues/1279, maybe? :)
+// PS: you can still use { ... } if you find it simpler.
+//---------------------------------------------------------------------------------------------------------------------
+
+// float (varying)
+float2 Float2(float x)                             { float2 r = { x, x }; return r; }
+float2 Float2(float x, float y)                    { float2 r = { x, y }; return r; }
+float3 Float3(float x)                             { float3 r = { x, x, x }; return r; }
+float3 Float3(float2 x, float y)                   { float3 r = { x.x, x.y, y }; return r; }
+float3 Float3(float x, float2 y)                   { float3 r = { x, y.x, y.y }; return r; }
+float3 Float3(float x, float y, float z)           { float3 r = { x, y, z }; return r; }
+float4 Float4(float x)                             { float4 r = { x, x, x }; return r; }
+float4 Float4(float2 x, float2 y)                  { float4 r = { x.x, x.y, y.x, y.y }; return r; }
+float4 Float4(float2 x, float y, float z)          { float4 r = { x.x, x.y, y, z }; return r; }
+float4 Float4(float3 x, float y)                   { float4 r = { x.x, x.y, x.z, y }; return r; }
+float4 Float4(float x, float3 y)                   { float4 r = { x, y.x, y.y, y.z }; return r; }
+float4 Float4(float x, float2 y, float z)          { float4 r = { x, y.x, y.y, z }; return r; }
+float4 Float4(float x, float y, float2 z)          { float4 r = { x, y, z.x, z.y }; return r; }
+float4 Float4(float x, float y, float z, float w)  { float4 r = { x, y, z, w }; return r; }
+
+// float (uniform)
+uniform float2 Float2(uniform float x)                                      { uniform float2 r = { x, x }; return r; }
+uniform float2 Float2(uniform float x, uniform float y)                     { uniform float2 r = { x, y }; return r; }
+//uniform float3 Float3(uniform float x)                                      { uniform float3 r = { x, x, x }; return r; }
+//uniform float3 Float3(uniform float2 x, uniform float y)                    { uniform float3 r = { x.x, x.y, y }; return r; }
+//uniform float3 Float3(uniform float x, uniform float2 y)                    { uniform float3 r = { x, y.x, y.y }; return r; }
+//uniform float3 Float3(uniform float x, uniform float y, uniform float z)    { uniform float3 r = { x, y, z }; return r; }
+//uniform float4 Float4(uniform float x)                                      { uniform float4 r = { x, x, x }; return r; }
+//uniform float4 Float4(uniform float2 x, uniform float2 y)                   { uniform float4 r = { x.x, x.y, y.x, y.y }; return r; }
+//uniform float4 Float4(uniform float2 x, uniform float y, uniform float z)   { uniform float4 r = { x.x, x.y, y, z }; return r; }
+//uniform float4 Float4(uniform float3 x, uniform float y)                    { uniform float4 r = { x.x, x.y, x.z, y }; return r; }
+//uniform float4 Float4(uniform float x, uniform float3 y)                    { uniform float4 r = { x, y.x, y.y, y.z }; return r; }
+//uniform float4 Float4(uniform float x, uniform float2 y, uniform float z)   { uniform float4 r = { x, y.x, y.y, z }; return r; }
+
+// int
+int2 Int2(int x)                                   { int2 r = { x, x }; return r; }
+int2 Int2(int x, int y)                            { int2 r = { x, y }; return r; }
+int3 Int3(int x)                                   { int3 r = { x, x, x }; return r; }
+int3 Int3(int2 x, int y)                           { int3 r = { x.x, x.y, y }; return r; }
+int3 Int3(int x, int2 y)                           { int3 r = { x, y.x, y.y }; return r; }
+int3 Int3(int x, int y, int z)                     { int3 r = { x, y, z }; return r; }
+int4 Int4(int x)                                   { int4 r = { x, x, x }; return r; }
+int4 Int4(int2 x, int2 y)                          { int4 r = { x.x, x.y, y.x, y.y }; return r; }
+int4 Int4(int2 x, int y, int z)                    { int4 r = { x.x, x.y, y, z }; return r; }
+int4 Int4(int3 x, int y)                           { int4 r = { x.x, x.y, x.z, y }; return r; }
+int4 Int4(int x, int3 y)                           { int4 r = { x, y.x, y.y, y.z }; return r; }
+int4 Int4(int x, int2 y, int z)                    { int4 r = { x, y.x, y.y, z }; return r; }
+int4 Int4(int x, int y, int2 z)                    { int4 r = { x, y, z.x, z.y }; return r; }
+int4 Int4(int x, int y, int z, int w)              { int4 r = { x, y, z, w }; return r; }
+
+// bool
+bool2 Bool2(bool x)                                { bool2 r = { x, x }; return r; }
+bool2 Bool2(bool x, bool y)                        { bool2 r = { x, y }; return r; }
+bool3 Bool3(bool x)                                { bool3 r = { x, x, x }; return r; }
+bool3 Bool3(bool2 x, bool y)                       { bool3 r = { x.x, x.y, y }; return r; }
+bool3 Bool3(bool x, bool2 y)                       { bool3 r = { x, y.x, y.y }; return r; }
+bool3 Bool3(bool x, bool y, bool z)                { bool3 r = { x, y, z }; return r; }
+bool4 Bool4(bool x)                                { bool4 r = { x, x, x }; return r; }
+bool4 Bool4(bool2 x, bool2 y)                      { bool4 r = { x.x, x.y, y.x, y.y }; return r; }
+bool4 Bool4(bool2 x, bool y, bool z)               { bool4 r = { x.x, x.y, y, z }; return r; }
+bool4 Bool4(bool3 x, bool y)                       { bool4 r = { x.x, x.y, x.z, y }; return r; }
+bool4 Bool4(bool x, bool3 y)                       { bool4 r = { x, y.x, y.y, y.z }; return r; }
+bool4 Bool4(bool x, bool2 y, bool z)               { bool4 r = { x, y.x, y.y, z }; return r; }
+bool4 Bool4(bool x, bool y, bool2 z)               { bool4 r = { x, y, z.x, z.y }; return r; }
+bool4 Bool4(bool x, bool y, bool z, bool w)        { bool4 r = { x, y, z, w }; return r; }
+
+// Macros
+#define float2(x, y) Float2(x, y)
+#define float3(x, y, z) Float3(x, y, z)
+#define float4(x, y, z, w) Float4(x, y, z, w)
+
+//---------------------------------------------------------------------------------------------------------------------
+// INTRINSICS
+//---------------------------------------------------------------------------------------------------------------------
+
+// abs
+inline float2 abs(float2& f) { float2 r = { abs(f.x), abs(f.y) }; return r; }
+inline float3 abs(float3& f) { float3 r = { abs(f.x), abs(f.y), abs(f.z) }; return r; }
+inline float4 abs(float4& f) { float4 r = { abs(f.x), abs(f.y), abs(f.z), abs(f.w) }; return r; }
+
+// acos
+inline float2 acos(float2& f) { float2 r = { acos(f.x), acos(f.y) }; return r; }
+inline float3 acos(float3& f) { float3 r = { acos(f.x), acos(f.y), acos(f.z) }; return r; }
+inline float4 acos(float4& f) { float4 r = { acos(f.x), acos(f.y), acos(f.z), acos(f.w) }; return r; }
+
+// all
+inline bool all(float2& p) { return (p.x != 0 && p.y != 0); }
+inline bool all(float3& p) { return (p.x != 0 && p.y != 0 && p.z != 0); }
+inline bool all(float4& p) { return (p.x != 0 && p.y != 0 && p.z != 0 && p.w != 0); }
+
+// any
+inline bool any(float2& p) { return (p.x != 0 || p.y != 0); }
+inline bool any(float3& p) { return (p.x != 0 || p.y != 0 || p.z != 0); }
+inline bool any(float4& p) { return (p.x != 0 || p.y != 0 || p.z != 0 || p.w != 0); }
+
+// asin
+inline float2 asin(float2& f) { float2 r = { asin(f.x), asin(f.y) }; return r; }
+inline float3 asin(float3& f) { float3 r = { asin(f.x), asin(f.y), asin(f.z) }; return r; }
+inline float4 asin(float4& f) { float4 r = { asin(f.x), asin(f.y), asin(f.z), asin(f.w) }; return r; }
+
+// atan
+inline float2 atan(float2& f) { float2 r = { atan(f.x), atan(f.y) }; return r; }
+inline float3 atan(float3& f) { float3 r = { atan(f.x), atan(f.y), atan(f.z) }; return r; }
+inline float4 atan(float4& f) { float4 r = { atan(f.x), atan(f.y), atan(f.z), atan(f.w) }; return r; }
+
+// atan2
+inline float2 atan2(float2& x, float2& y) { float2 r = { atan2(y.x, x.x), atan2(y.y, x.y) }; return r; }
+inline float3 atan2(float3& x, float3& y) { float3 r = { atan2(y.x, x.x), atan2(y.y, x.y), atan2(y.z, x.z) }; return r; }
+inline float4 atan2(float4& x, float4& y) { float4 r = { atan2(y.x, x.x), atan2(y.y, x.y), atan2(y.z, x.z), atan2(y.w, x.w) }; return r; }
+
+// ceil
+inline float2 ceil(float2& f) { float2 r = { ceil(f.x), ceil(f.y) }; return r; }
+inline float3 ceil(float3& f) { float3 r = { ceil(f.x), ceil(f.y), ceil(f.z) }; return r; }
+inline float4 ceil(float4& f) { float4 r = { ceil(f.x), ceil(f.y), ceil(f.z), ceil(f.w) }; return r; }
+
+// clamp
+inline float2 clamp(float2& f, float minVal, float maxVal) { float2 r = { clamp(f.x, minVal, maxVal), clamp(f.y, minVal, maxVal) }; return r; }
+inline float3 clamp(float3& f, float minVal, float maxVal) { float3 r = { clamp(f.x, minVal, maxVal), clamp(f.y, minVal, maxVal), clamp(f.z, minVal, maxVal) }; return r; }
+inline float4 clamp(float4& f, float minVal, float maxVal) { float4 r = { clamp(f.x, minVal, maxVal), clamp(f.y, minVal, maxVal), clamp(f.z, minVal, maxVal), clamp(f.w, minVal, maxVal) }; return r; }
+
+// cos
+inline float2 cos(float2& f) { float2 r = { cos(f.x), cos(f.y) }; return r; }
+inline float3 cos(float3& f) { float3 r = { cos(f.x), cos(f.y), cos(f.z) }; return r; }
+inline float4 cos(float4& f) { float4 r = { cos(f.x), cos(f.y), cos(f.z), cos(f.w) }; return r; }
+
+// cosh
+inline float  cosh(float   f) { return (exp(f) + exp(-f)) / 2.0f; }
+inline float2 cosh(float2& f) { float2 r = { cosh(f.x), cosh(f.y) }; return r; }
+inline float3 cosh(float3& f) { float3 r = { cosh(f.x), cosh(f.y), cosh(f.z) }; return r; }
+inline float4 cosh(float4& f) { float4 r = { cosh(f.x), cosh(f.y), cosh(f.z), cosh(f.w) }; return r; }
+
+// cross
+inline float3 cross(float3& a, float3& b)
+{
+    float3 r;
+    r.x = a.y * b.z - a.z * b.y;
+    r.y = a.z * b.x - a.x * b.z;
+    r.z = a.x * b.y - a.y * b.x;
+    return r;
+}
+
+// degrees
+inline float  degrees(float   f) { return (180 * f) / PI; }
+inline float2 degrees(float2& f) { float2 r = { degrees(f.x), degrees(f.y) }; return r; }
+inline float3 degrees(float3& f) { float3 r = { degrees(f.x), degrees(f.y), degrees(f.z) }; return r; }
+inline float4 degrees(float4& f) { float4 r = { degrees(f.x), degrees(f.y), degrees(f.z), degrees(f.w) }; return r; }
+
+// determinant
+float determinant(float2x2& m)
+{
+    return m.m[0][0] * m.m[1][1] - m.m[1][0] * m.m[0][1];
+}
+float determinant(float3x3& m)
+{
+    return   m.m[0][0] * (m.m[1][1] * m.m[2][2] - m.m[2][1] * m.m[1][2])
+           - m.m[1][0] * (m.m[0][1] * m.m[2][2] - m.m[2][1] * m.m[0][2])
+           + m.m[2][0] * (m.m[0][1] * m.m[1][2] - m.m[1][1] * m.m[0][2]);
+}
+//float determinant(float4x4& m)
+//{
+//    float2x2 a = float2x2(m);
+//    float2x2 b = float2x2(m[2].xy, m[3].xy);
+//    float2x2 c = float2x2(m[0].zw, m[1].zw);
+//    float2x2 d = float2x2(m[2].zw, m[3].zw);
+//    float s = determinant(a);
+//    return s*determinant(d - (1.0 / s)*c*float2x2(a[1][1], -a[0][1], -a[1][0], a[0][0])*b);
+//}
+
+// dot
+inline float dot(float2& a, float2& b) { return a.x*b.x + a.y*b.y; }
+inline float dot(float3& a, float3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+inline varying float dot(uniform float3& a, uniform float3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+inline varying float dot(uniform float3& a, varying float3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+inline varying float dot(varying float3& a, uniform float3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+inline float dot(float4& a, float4& b) { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
+
+// distance
+inline float distance(float&  a, float&  b) { return abs(a - b); }
+inline float distance(float2& a, float2& b) { return sqrt(dot(a, b)); }
+inline float distance(float3& a, float3& b) { return sqrt(dot(a, b)); }
+inline float distance(float4& a, float4& b) { return sqrt(dot(a, b)); }
+
+// exp
+inline float2 exp(float2& f) { float2 r = { exp(f.x), exp(f.y) }; return r; }
+inline float3 exp(float3& f) { float3 r = { exp(f.x), exp(f.y), exp(f.z) }; return r; }
+inline float4 exp(float4& f) { float4 r = { exp(f.x), exp(f.y), exp(f.z), exp(f.w) }; return r; }
+
+// exp2
+inline float2 exp2(float2& f) { float2 r = { pow(2, f.x), pow(2, f.y) }; return r; }
+inline float3 exp2(float3& f) { float3 r = { pow(2, f.x), pow(2, f.y), pow(2, f.z) }; return r; }
+inline float4 exp2(float4& f) { float4 r = { pow(2, f.x), pow(2, f.y), pow(2, f.z), pow(2, f.w) }; return r; }
+
+// floor
+inline float2 floor(float2& f) { float2 r = { floor(f.x), floor(f.y) }; return r; }
+inline float3 floor(float3& f) { float3 r = { floor(f.x), floor(f.y),floor(f.z) }; return r; }
+inline float4 floor(float4& f) { float4 r = { floor(f.x), floor(f.y),floor(f.z), floor(f.w) }; return r; }
+
+// fmod
+inline float  fmod(float   x, float   y) { return x - y * floor(x / y); }
+inline float2 fmod(float2& f, float   m) { float2 r = { fmod(f.x, m),   fmod(f.y, m) }; return r; }
+inline float2 fmod(float2& f, float2& m) { float2 r = { fmod(f.x, m.x), fmod(f.y, m.y) }; return r; }
+inline float3 fmod(float3& f, float   m) { float3 r = { fmod(f.x, m),   fmod(f.y, m),   fmod(f.z, m) }; return r; }
+inline float3 fmod(float3& f, float3& m) { float3 r = { fmod(f.x, m.x), fmod(f.y, m.y), fmod(f.z, m.z) }; return r; }
+inline float4 fmod(float4& f, float   m) { float4 r = { fmod(f.x, m),   fmod(f.y, m),   fmod(f.z, m),   fmod(f.w, m) }; return r; }
+inline float4 fmod(float4& f, float4& m) { float4 r = { fmod(f.x, m.x), fmod(f.y, m.y), fmod(f.z, m.z), fmod(f.w, m.w) }; return r; }
+
+// frac
+inline float  frac(float   f) { return f - floor(f); }
+inline float2 frac(float2& f) { return f - floor(f); }
+inline float3 frac(float3& f) { return f - floor(f); }
+inline float4 frac(float4& f) { return f - floor(f); }
+
+// length
+inline float length(float2& p) { return sqrt(dot(p, p)); }
+inline float length(float3& p) { return sqrt(dot(p, p)); }
+inline float length(float4& p) { return sqrt(dot(p, p)); }
+
+// lerp
+inline float  lerp(float   a, float   b, float s) { return a + s*(b-a); }
+inline float2 lerp(float2& a, float2& b, float s) { float2 r = { lerp(a.x, b.x, s), lerp(a.y, b.y, s) }; return r; }
+inline float3 lerp(float3& a, float3& b, float s) { float3 r = { lerp(a.x, b.x, s), lerp(a.y, b.y, s), lerp(a.z, b.z, s) }; return r; }
+inline float4 lerp(float4& a, float4& b, float s) { float4 r = { lerp(a.x, b.x, s), lerp(a.y, b.y, s), lerp(a.z, b.z, s), lerp(a.w, b.w, s) }; return r; }
+
+// log
+inline float2 log(float2& f) { float2 r = { log(f.x), log(f.y) }; return r; }
+inline float3 log(float3& f) { float3 r = { log(f.x), log(f.y), log(f.z) }; return r; }
+inline float4 log(float4& f) { float4 r = { log(f.x), log(f.y), log(f.z), log(f.w) }; return r; }
+
+// log10
+inline float  log10(float   f) { return (log(f) / log(10.0f)); }
+inline float2 log10(float2& f) { float2 r = { log10(f.x), log10(f.y) }; return r; }
+inline float3 log10(float3& f) { float3 r = { log10(f.x), log10(f.y), log10(f.z) }; return r; }
+inline float4 log10(float4& f) { float4 r = { log10(f.x), log10(f.y), log10(f.z), log10(f.w) }; return r; }
+
+// log2
+inline float  log2(float   f) { return (log(f) / log(2.0f)); }
+inline float2 log2(float2& f) { float2 r = { log2(f.x), log2(f.y) }; return r; }
+inline float3 log2(float3& f) { float3 r = { log2(f.x), log2(f.y), log2(f.z) }; return r; }
+inline float4 log2(float4& f) { float4 r = { log2(f.x), log2(f.y), log2(f.z), log2(f.w) }; return r; }
+
+// mad
+inline float  mad(float   a, float   b, float   s) { return a*b + s; }
+inline float2 mad(float2& a, float2& b, float2& s) { return a*b + s; }
+inline float3 mad(float3& a, float3& b, float3& s) { return a*b + s; }
+inline float4 mad(float4& a, float4& b, float4& s) { return a*b + s; }
+
+// max
+inline float2 max(float2& a, float2& b) { float2 r = { max(a.x, b.x), max(a.y, b.y) }; return r; }
+inline float3 max(float3& a, float3& b) { float3 r = { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) }; return r; }
+inline float4 max(float4& a, float4& b) { float4 r = { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w) }; return r; }
+
+// min
+inline float2 min(float2& a, float2& b) { float2 r = { min(a.x, b.x), min(a.y, b.y) }; return r; }
+inline float3 min(float3& a, float3& b) { float3 r = { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) }; return r; }
+inline float4 min(float4& a, float4& b) { float4 r = { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w) }; return r; }
+
+// mul
+inline float2x2 mul(float2x2& a, float2x2& b)
+{
+    float2x2 r;
+
+    // naive
+    for (int i = 0; i < 2; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            r.m[i][j] = 0.0f;
+
+            for (int p = 0; p < 2; p++)
+                r.m[i][j] += a.m[i][p] * b.m[p][j];
+        }
+    }
+
+    return r;
+}
+inline float3x3 mul(float3x3& a, float3x3& b)
+{
+    float3x3 r;
+
+    // naive
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            r.m[i][j] = 0.0f;
+
+            for (int p = 0; p < 3; p++)
+                r.m[i][j] += a.m[i][p] * b.m[p][j];
+        }
+    }
+
+    return r;
+}
+inline float4x4 mul(float4x4& a, float4x4& b)
+{
+    float4x4 r;
+
+    // naive
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            r.m[i][j] = 0.0f;
+
+            for (int p = 0; p < 4; p++)
+                r.m[i][j] += a.m[i][p] * b.m[p][j];
+        }
+    }
+
+    return r;
+}
+
+// normalize
+inline float2 normalize(float2& f) { return f / length(f); }
+inline float3 normalize(float3& f) { return f / length(f); }
+inline float4 normalize(float4& f) { return f / length(f); }
+
+// pow
+inline float2 pow(float2& f, float m)   { float2 r = { pow(f.x, m),   pow(f.y, m) }; return r; }
+inline float2 pow(float2& f, float2& m) { float2 r = { pow(f.x, m.x), pow(f.y, m.y) }; return r; }
+inline float3 pow(float3& f, float m)   { float3 r = { pow(f.x, m),   pow(f.y, m),   pow(f.z, m) }; return r; }
+inline float3 pow(float3& f, float3& m) { float3 r = { pow(f.x, m.x), pow(f.y, m.y), pow(f.z, m.z) }; return r; }
+inline float4 pow(float4& f, float m)   { float4 r = { pow(f.x, m),   pow(f.y, m),   pow(f.z, m),   pow(f.w, m) }; return r; }
+inline float4 pow(float4& f, float4& m) { float4 r = { pow(f.x, m.x), pow(f.y, m.y), pow(f.z, m.z), pow(f.w, m.w) }; return r; }
+
+// radians
+inline float  radians(float   f) { return (PI * f) / 180.0f; }
+inline float2 radians(float2& f) { return (PI * f) / 180.0f; }
+inline float3 radians(float3& f) { return (PI * f) / 180.0f; }
+inline float4 radians(float4& f) { return (PI * f) / 180.0f; }
+
+// rcp
+inline float2 rcp(float2& f) { float2 r = { rcp(f.x), rcp(f.y) }; return r; }
+inline float3 rcp(float3& f) { float3 r = { rcp(f.x), rcp(f.y), rcp(f.z) }; return r; }
+inline float4 rcp(float4& f) { float4 r = { rcp(f.x), rcp(f.y), rcp(f.z), rcp(f.w) }; return r; }
+
+// reflect
+inline float2 reflect(float2& i, float2& n) { return (i - 2.0f * n * dot(n, i)); }
+inline float3 reflect(float3& i, float3& n) { return (i - 2.0f * n * dot(n, i)); }
+inline float4 reflect(float4& i, float4& n) { return (i - 2.0f * n * dot(n, i)); }
+
+// refract
+inline float2 refract(float2& i, float2& n, float rindex)
+{
+    float2 r;
+
+    float k = 1.0f - rindex * rindex * (1.0f - dot(n, i) * dot(n, i));
+    if (k < 0.0f)
+        r = 0;
+    else
+        r = rindex * i - (rindex * dot(n, i) + sqrt(k)) * n;
+
+    return r;
+}
+inline float3 refract(float3& i, float3& n, float rindex)
+{
+    float3 r;
+
+    float k = 1.0f - rindex * rindex * (1.0f - dot(n, i) * dot(n, i));
+    if (k < 0.0f)
+        r = 0;
+    else
+        r = rindex * i - (rindex * dot(n, i) + sqrt(k)) * n;
+
+    return r;
+}
+inline float4 refract(float4& i, float4& n, float rindex)
+{
+    float4 r;
+
+    float k = 1.0f - rindex * rindex * (1.0f - dot(n, i) * dot(n, i));
+    if (k < 0.0f)
+        r = 0;
+    else
+        r = rindex * i - (rindex * dot(n, i) + sqrt(k)) * n;
+
+    return r;
+}
+
+// round
+inline float2 round(float2& f) { float2 r = { round(f.x), round(f.y) }; return r; }
+inline float3 round(float3& f) { float3 r = { round(f.x), round(f.y), round(f.z) }; return r; }
+inline float4 round(float4& f) { float4 r = { round(f.x), round(f.y), round(f.z), round(f.w) }; return r; }
+
+// rsqrt
+inline float2 rsqrt(float2& f) { float2 r = { rsqrt(f.x), rsqrt(f.y) }; return r; }
+inline float3 rsqrt(float3& f) { float3 r = { rsqrt(f.x), rsqrt(f.y), rsqrt(f.z) }; return r; }
+inline float4 rsqrt(float4& f) { float4 r = { rsqrt(f.x), rsqrt(f.y), rsqrt(f.z), rsqrt(f.w) }; return r; }
+
+// saturate
+inline float  saturate(float   f) { return clamp(f, 0.0f, 1.0f); }
+inline float2 saturate(float2& f) { return clamp(f, 0.0f, 1.0f); }
+inline float3 saturate(float3& f) { return clamp(f, 0.0f, 1.0f); }
+inline float4 saturate(float4& f) { return clamp(f, 0.0f, 1.0f); }
+
+// sign
+inline float  sign(float   f) { return f < 0 ? -1 : 1; }
+inline float2 sign(float2& f) { float2 r = { f.x < 0 ? -1 : 1, f.y < 0 ? -1 : 1 }; return r; }
+inline float3 sign(float3& f) { float3 r = { f.x < 0 ? -1 : 1, f.y < 0 ? -1 : 1, f.z < 0 ? -1 : 1 }; return r; }
+inline float4 sign(float4& f) { float4 r = { f.x < 0 ? -1 : 1, f.y < 0 ? -1 : 1, f.z < 0 ? -1 : 1, f.w < 0 ? -1 : 1 }; return r; }
+
+// sin
+inline float2 sin(float2& f) { float2 r = { sin(f.x), sin(f.y) }; return r; }
+inline float3 sin(float3& f) { float3 r = { sin(f.x), sin(f.y), sin(f.z) }; return r; }
+inline float4 sin(float4& f) { float4 r = { sin(f.x), sin(f.y), sin(f.z), sin(f.w) }; return r; }
+
+// sincos
+//inline void sincos(float2& x, float2* sinVal, float2* cosVal) { sincos(x.x, sinVal.x, cosVal.x); sincos(x.y, sinVal.y, cosVal.y); }; return r; }
+//inline void sincos(float3& x, float3* sinVal, float3* cosVal) { sincos(x.x, sinVal.x, cosVal.x); sincos(x.y, sinVal.y, cosVal.y); sincos(x.z, sinVal.z, cosVal.z); }; return r; }
+//inline void sincos(float4& x, float4* sinVal, float4* cosVal) { sincos(x.x, sinVal.x, cosVal.x); sincos(x.y, sinVal.y, cosVal.y); sincos(x.z, sinVal.z, cosVal.z); sincos(x.w, sinVal.w, cosVal.w); }; return r; }
+
+// sinh
+inline float  sinh(float   f) { return (exp(f) - exp(-f)) / 2.0f; }
+inline float2 sinh(float2& f) { float2 r = { sinh(f.x), sinh(f.y) }; return r; }
+inline float3 sinh(float3& f) { float3 r = { sinh(f.x), sinh(f.y), sinh(f.z) }; return r; }
+inline float4 sinh(float4& f) { float4 r = { sinh(f.x), sinh(f.y), sinh(f.z), sinh(f.w) }; return r; }
+
+// smoothstep
+inline float smoothstep(float minValue, float maxValue, float x)
+{ 
+    float t;
+    t = saturate((x - minValue) / (maxValue - minValue));
+    return t * t * (3.0f - 2.0f * t);
+}
+inline float2 smoothstep(float2& a, float2& b, float& x) { float2 r = { smoothstep(a.x, b.x, x), smoothstep(a.y, b.y, x) }; return r; }
+inline float3 smoothstep(float3& a, float3& b, float& x) { float3 r = { smoothstep(a.x, b.x, x), smoothstep(a.y, b.y, x), smoothstep(a.z, b.z, x) }; return r; }
+inline float4 smoothstep(float4& a, float4& b, float& x) { float4 r = { smoothstep(a.x, b.x, x), smoothstep(a.y, b.y, x), smoothstep(a.z, b.z, x), smoothstep(a.w, b.w, x) }; return r; }
+
+// sqrt
+inline float2 sqrt(float2& f) { float2 r = { sqrt(f.x), sqrt(f.y) }; return r; }
+inline float3 sqrt(float3& f) { float3 r = { sqrt(f.x), sqrt(f.y), sqrt(f.z) }; return r; }
+inline float4 sqrt(float4& f) { float4 r = { sqrt(f.x), sqrt(f.y), sqrt(f.z), sqrt(f.w) }; return r; }
+
+// step
+inline float  step(float   y, float   x) { return x >= y ? 1.0 : 0.0; }
+inline float2 step(float2& y, float2& x) { float2 r = { step(y.x, x.x), step(y.y, x.y) }; return r; }
+inline float3 step(float3& y, float3& x) { float3 r = { step(y.x, x.x), step(y.y, x.y), step(y.z, x.z) }; return r; }
+inline float4 step(float4& y, float4& x) { float4 r = { step(y.x, x.x), step(y.y, x.y), step(y.z, x.z), step(x.w, y.w) }; return r; }
+
+// tan
+inline float2 tan(float2& f) { float2 r = { tan(f.x), tan(f.y) }; return r; }
+inline float3 tan(float3& f) { float3 r = { tan(f.x), tan(f.y), tan(f.z) }; return r; }
+inline float4 tan(float4& f) { float4 r = { tan(f.x), tan(f.y), tan(f.z), tan(f.w) }; return r; }
+
+// tanh
+inline float  tanh(float   f) { return sinh(f) / cosh(f); }
+inline float2 tanh(float2& f) { float2 r = { tanh(f.x), tanh(f.y) }; return r; }
+inline float3 tanh(float3& f) { float3 r = { tanh(f.x), tanh(f.y), tanh(f.z) }; return r; }
+inline float4 tanh(float4& f) { float4 r = { tanh(f.x), tanh(f.y), tanh(f.z), tanh(f.w) }; return r; }
+
+// transpose
+float2x2 transpose(float2x2& m)
+{
+    float2x2 r;
+    r.m[0][0] = m.m[0][0];
+    r.m[0][1] = m.m[1][0];
+    r.m[1][0] = m.m[0][1];
+    r.m[1][1] = m.m[1][1];
+    return r;
+}
+float3x3 transpose(float3x3& m)
+{
+    float3x3 r;
+    r.m[0][0] = m.m[0][0];
+    r.m[0][1] = m.m[1][0];
+    r.m[0][2] = m.m[2][0];
+    r.m[1][0] = m.m[0][1];
+    r.m[1][1] = m.m[1][1];
+    r.m[1][2] = m.m[2][1];
+    r.m[2][0] = m.m[0][2];
+    r.m[2][1] = m.m[1][2];
+    r.m[2][2] = m.m[2][2];
+    return r;
+}
+float4x4 transpose(float4x4& m)
+{
+    float4x4 r;
+    r.m[0][0] = m.m[0][0];
+    r.m[0][1] = m.m[1][0];
+    r.m[0][2] = m.m[2][0];
+    r.m[0][3] = m.m[3][0];
+    r.m[1][0] = m.m[0][1];
+    r.m[1][1] = m.m[1][1];
+    r.m[1][2] = m.m[2][1];
+    r.m[1][3] = m.m[3][1];
+    r.m[2][0] = m.m[0][2];
+    r.m[2][1] = m.m[1][2];
+    r.m[2][2] = m.m[2][2];
+    r.m[2][3] = m.m[3][2];
+    r.m[3][0] = m.m[0][3];
+    r.m[3][1] = m.m[1][3];
+    r.m[3][2] = m.m[2][3];
+    r.m[3][3] = m.m[3][3];
+    return r;
+}
+
+// trunc
+inline int  trunc(float   f) { return (int)floor(f); }
+inline int2 trunc(float2& f) { int2 r = { trunc(f.x), trunc(f.y) }; return r; }
+inline int3 trunc(float3& f) { int3 r = { trunc(f.x), trunc(f.y), trunc(f.z) }; return r; }
+inline int4 trunc(float4& f) { int4 r = { trunc(f.x), trunc(f.y), trunc(f.z), trunc(f.w) }; return r; }
+
+inline float3 mul(float3x3 a, float3 v) {
+    float3x3 m = transpose(a);
+    return Float3(dot(m.m[0], v), dot(m.m[1], v), dot(m.m[2], v));
+}
+
+//-------------------------------------------------------------------------------------------------
+// TEXTURES, SAMPLERS, et Al.
+//-------------------------------------------------------------------------------------------------
+
+// Texture
+typedef enum TEXTURE_FILTER
+{
+    TEXTURE_FILTER_MIN_MAG_MIP_POINT = 0,
+    //FILTER_MIN_MAG_POINT_MIP_LINEAR = 0x1,
+    //FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT = 0x4,
+    //FILTER_MIN_POINT_MAG_MIP_LINEAR = 0x5,
+    //FILTER_MIN_LINEAR_MAG_MIP_POINT = 0x10,
+    //FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR = 0x11,
+    //FILTER_MIN_MAG_LINEAR_MIP_POINT = 0x14,
+    //FILTER_MIN_MAG_MIP_LINEAR = 0x15,
+    //FILTER_ANISOTROPIC = 0x55,
+    //FILTER_COMPARISON_MIN_MAG_MIP_POINT = 0x80,
+    //FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR = 0x81,
+    //FILTER_COMPARISON_MIN_POINT_MAG_LINEAR_MIP_POINT = 0x84,
+    //FILTER_COMPARISON_MIN_POINT_MAG_MIP_LINEAR = 0x85,
+    //FILTER_COMPARISON_MIN_LINEAR_MAG_MIP_POINT = 0x90,
+    //FILTER_COMPARISON_MIN_LINEAR_MAG_POINT_MIP_LINEAR = 0x91,
+    //FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT = 0x94,
+    //FILTER_COMPARISON_MIN_MAG_MIP_LINEAR = 0x95,
+    //FILTER_COMPARISON_ANISOTROPIC = 0xd5,
+    //FILTER_MINIMUM_MIN_MAG_MIP_POINT = 0x100,
+    //FILTER_MINIMUM_MIN_MAG_POINT_MIP_LINEAR = 0x101,
+    //FILTER_MINIMUM_MIN_POINT_MAG_LINEAR_MIP_POINT = 0x104,
+    //FILTER_MINIMUM_MIN_POINT_MAG_MIP_LINEAR = 0x105,
+    //FILTER_MINIMUM_MIN_LINEAR_MAG_MIP_POINT = 0x110,
+    //FILTER_MINIMUM_MIN_LINEAR_MAG_POINT_MIP_LINEAR = 0x111,
+    //FILTER_MINIMUM_MIN_MAG_LINEAR_MIP_POINT = 0x114,
+    //FILTER_MINIMUM_MIN_MAG_MIP_LINEAR = 0x115,
+    //FILTER_MINIMUM_ANISOTROPIC = 0x155,
+    //FILTER_MAXIMUM_MIN_MAG_MIP_POINT = 0x180,
+    //FILTER_MAXIMUM_MIN_MAG_POINT_MIP_LINEAR = 0x181,
+    //FILTER_MAXIMUM_MIN_POINT_MAG_LINEAR_MIP_POINT = 0x184,
+    //FILTER_MAXIMUM_MIN_POINT_MAG_MIP_LINEAR = 0x185,
+    //FILTER_MAXIMUM_MIN_LINEAR_MAG_MIP_POINT = 0x190,
+    //FILTER_MAXIMUM_MIN_LINEAR_MAG_POINT_MIP_LINEAR = 0x191,
+    //FILTER_MAXIMUM_MIN_MAG_LINEAR_MIP_POINT = 0x194,
+    //FILTER_MAXIMUM_MIN_MAG_MIP_LINEAR = 0x195,
+    //FILTER_MAXIMUM_ANISOTROPIC = 0x1d5
+};
+
+typedef enum TEXTURE_ADDRESS_MODE 
+{
+    TEXTURE_ADDRESS_WRAP = 1,
+    TEXTURE_ADDRESS_MIRROR = 2,
+    TEXTURE_ADDRESS_CLAMP = 3,
+    TEXTURE_ADDRESS_BORDER = 4,
+};
+
+
+struct SamplerState
+{
+    TEXTURE_FILTER       filter;
+    TEXTURE_ADDRESS_MODE addressU;
+    TEXTURE_ADDRESS_MODE addressV;
+    float4               borderColor;
+    //TEXTURE_ADDRESS_MODE      addressW;
+    //FLOAT                      MipLODBias;
+    //UINT                       MaxAnisotropy;
+    //D3D11_COMPARISON_FUNC      ComparisonFunc;
+    //FLOAT                      MinLOD;
+    //FLOAT                      MaxLOD;
+};
+
+
+struct Texture2D
+{
+    int width;
+    int height;
+    int numComponents;
+
+    float* pData;
+};
+
+
+float4 SampleTexture2D(const Texture2D* pTexture, const SamplerState& sampler, const float2 uv)
+{
+    float u = uv.x;
+    float v = uv.y;
+
+    //--------------------------------------------------
+    // U
+    //--------------------------------------------------
+
+    // Wrap
+    if (sampler.addressU == TEXTURE_ADDRESS_WRAP)
+    {
+        u = fmod(u, 1.0f);
+    }
+    // Clamp
+    else if (sampler.addressU == TEXTURE_ADDRESS_CLAMP)
+    {
+        u = clamp(u, 0.0f, 1.0f);
+    }
+    // Mirror
+    else if (sampler.addressU == TEXTURE_ADDRESS_MIRROR)
+    {
+        if (trunc(u) % 2)
+            u = frac(u);
+        else
+            u = 1.0f - frac(u);
+    }
+    // Border
+    else if (sampler.addressU == TEXTURE_ADDRESS_BORDER)
+    {
+        if (u > 1.0f || u < 0.0f)
+            return sampler.borderColor;
+    }
+
+    //--------------------------------------------------
+    // V
+    //--------------------------------------------------
+
+    // Wrap
+    if (sampler.addressV == TEXTURE_ADDRESS_WRAP)
+    {
+        v = fmod(v, 1.0f);
+    }
+    // Clamp
+    else if (sampler.addressV == TEXTURE_ADDRESS_CLAMP)
+    {
+        v = clamp(v, 0.0f, 1.0f);
+    }
+    // Mirror
+    else if (sampler.addressV == TEXTURE_ADDRESS_MIRROR)
+    {
+        if (trunc(v) % 2)
+            v = frac(v);
+        else
+            v = 1.0f - frac(v);
+    }
+    // Border
+    else if (sampler.addressV == TEXTURE_ADDRESS_BORDER)
+    {
+        if (v > 1.0f || v < 0.0f)
+            return sampler.borderColor;
+    }
+
+    u *= (pTexture->width - 1);
+    v *= (pTexture->height - 1);
+
+    int index = pTexture->numComponents * (trunc(v) * pTexture->width + trunc(u));
+
+    return float4(pTexture->pData[index + 0],
+                  pTexture->pData[index + 1],
+                  pTexture->pData[index + 2],
+                  pTexture->pData[index + 3]);
+}
+
+// -*- mode: c++ -*-
+/*
+  Copyright (c) 2010-2011, Intel Corporation
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+   IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+   TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+   PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+   OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  
+*/
+/*
+  Based on Syoyo Fujita's aobench: http://code.google.com/p/aobench
+*/
+
+#define NAO_SAMPLES		8
+#define M_PI 3.1415926535f
+
+struct Isect {
+    float      t;
+    float3        p;
+    float3        n;
+    int        hit; 
+};
+
+struct Sphere {
+    float3        center;
+    float      radius;
+};
+
+struct Plane {
+    float3    p;
+    float3    n;
+};
+
+struct Ray {
+    float3 org;
+    float3 dir;
+};
+
+static inline float3 vcross(float3 v0, float3 v1) {
+    float3 ret;
+    ret.x = v0.y * v1.z - v0.z * v1.y;
+    ret.y = v0.z * v1.x - v0.x * v1.z;
+    ret.z = v0.x * v1.y - v0.y * v1.x;
+    return ret;
+}
+
+static inline void normalize_inplace(float3 &v) {
+    float len2 = dot(v, v);
+    float invlen = rsqrt(len2);
+    v *= invlen;
+}
+
+
+static void
+ray_plane_intersect(Isect &isect, Ray &ray, uniform Plane &plane) {
+    float d = -dot(plane.p, plane.n);
+    float v = dot(ray.dir, plane.n);
+
+    cif (abs(v) < 1.0e-17) 
+        return;
+    else {
+        float t = -(dot(ray.org, plane.n) + d) / v;
+
+        cif ((t > 0.0) && (t < isect.t)) {
+            isect.t = t;
+            isect.hit = 1;
+            isect.p = ray.org + ray.dir * t;
+            isect.n = plane.n;
+        }
+    }
+}
+
+
+static inline void
+ray_sphere_intersect(Isect &isect, Ray &ray, uniform Sphere &sphere) {
+    float3 rs = ray.org - sphere.center;
+
+    float B = dot(rs, ray.dir);
+    float C = dot(rs, rs) - sphere.radius * sphere.radius;
+    float D = B * B - C;
+
+    cif (D > 0.) {
+        float t = -B - sqrt(D);
+
+        cif ((t > 0.0) && (t < isect.t)) {
+            isect.t = t;
+            isect.hit = 1;
+            isect.p = ray.org + t * ray.dir;
+            isect.n = isect.p - sphere.center;
+            normalize_inplace(isect.n);
+        }
+    }
+}
+
+
+static void
+orthoBasis(float3 basis[3], float3 n) {
+    basis[2] = n;
+    basis[1].x = 0.0; basis[1].y = 0.0; basis[1].z = 0.0;
+
+    if ((n.x < 0.6) && (n.x > -0.6)) {
+        basis[1].x = 1.0;
+    } else if ((n.y < 0.6) && (n.y > -0.6)) {
+        basis[1].y = 1.0;
+    } else if ((n.z < 0.6) && (n.z > -0.6)) {
+        basis[1].z = 1.0;
+    } else {
+        basis[1].x = 1.0;
+    }
+
+    basis[0] = cross(basis[1], basis[2]);
+    normalize_inplace(basis[0]);
+
+    basis[1] = cross(basis[2], basis[0]);
+    normalize_inplace(basis[1]);
+}
+
+
+static float
+ambient_occlusion(Isect &isect, uniform Plane &plane, uniform Sphere spheres[3],
+                  RNGState &rngstate) {
+    float eps = 0.0001f;
+    float3 p, n;
+    float3 basis[3];
+    float occlusion = 0.0;
+
+    p = isect.p + eps * isect.n;
+
+    orthoBasis(basis, isect.n);
+
+    static const uniform int ntheta = NAO_SAMPLES;
+    static const uniform int nphi   = NAO_SAMPLES;
+    for (uniform int j = 0; j < ntheta; j++) {
+        for (uniform int i = 0; i < nphi; i++) {
+            Ray ray;
+            Isect occIsect;
+
+            float theta = sqrt(frandom(&rngstate));
+            float phi   = 2.0f * M_PI * frandom(&rngstate);
+            float x = cos(phi) * theta;
+            float y = sin(phi) * theta;
+            float z = sqrt(1.0 - theta * theta);
+
+            // local . global
+            float rx = x * basis[0].x + y * basis[1].x + z * basis[2].x;
+            float ry = x * basis[0].y + y * basis[1].y + z * basis[2].y;
+            float rz = x * basis[0].z + y * basis[1].z + z * basis[2].z;
+
+            ray.org = p;
+            ray.dir.x = rx;
+            ray.dir.y = ry;
+            ray.dir.z = rz;
+
+            occIsect.t   = 1.0e+17;
+            occIsect.hit = 0;
+
+            for (uniform int snum = 0; snum < 3; ++snum)
+                ray_sphere_intersect(occIsect, ray, spheres[snum]); 
+            ray_plane_intersect (occIsect, ray, plane); 
+
+            if (occIsect.hit) occlusion += 1.0;
+        }
+    }
+
+    occlusion = (ntheta * nphi - occlusion) / (float)(ntheta * nphi);
+    return occlusion;
+}
+
+static float3x3 rotationXY( float x, float y ) {
+	float cp = cos( x );
+	float sp = sin( x );
+	float cy = cos( y );
+	float sy = sin( y );
+
+    
+
+    float3x3 ry = {{
+        Float3(cy, -sy, 0.0),
+        Float3(sy, cy, 0.0),
+        Float3(0.0, 0.0, 1.0)
+    }};
+    float3x3 rx = {{
+        Float3(cp, 0.0, -sp),
+        Float3(0.0, 1.0, 0.0),
+        Float3(sp, 0.0, cp)
+    }};
+
+    return mul(ry, rx);
+}
+
+/* Compute the image for the scanlines from [y0,y1), for an overall image
+   of width w and height h.
+ */
+static void ao_scanlines(
+    uniform int y0, uniform int y1, 
+    uniform int w, uniform int h,  
+    uniform int startX, uniform int endX,
+    uniform int startY,
+    uniform int nsubsamples, uniform int frame,
+    uniform float image[]
+    ) {
+    static uniform Plane plane = { { 0.0f, -0.5f, 0.0f }, { 0.f, 1.f, 0.f } };
+    static uniform Sphere spheres[3] = {
+        { { -2.0f, 0.0f, -3.5f }, 0.5f },
+        { { -0.5f, 0.0f, -3.0f }, 0.5f },
+        { { 1.0f, 0.0f, -2.2f }, 0.5f } };
+    RNGState rngstate;
+
+    uniform float time = (float)frame * 0.016f;
+    uniform float invSamples = 1.0f / nsubsamples;
+    uniform float timeDiv = 0.016f / (nsubsamples*nsubsamples+1.0);
+
+    uniform float2 duv = Float2(1.0f / (float)w, 1.0f / (float)h);
+    uniform float aspectRatio = (float)w / (float)h;
+    uniform float2 aspectRatioScaler = 2.0f * Float2(1.0f, 1.0f/aspectRatio);
+
+    seed_rng(&rngstate, programIndex + (y0 << (programIndex & 15)));
+
+    foreach_tiled(
+        y = y0 ... y1, x = startX ... endX, 
+        u = 0 ... nsubsamples, v = 0 ... nsubsamples
+    ) {
+        float2 uv = Float2((float)x / (float)w, 1.0f - (float)y / (float)h);
+
+        float ret = 0.f;
+        Ray ray;
+        Isect isect;
+
+        float dt = ((float)(u + v * nsubsamples)+frandom(&rngstate)) * timeDiv;
+        float t = time - dt;
+        float3x3 rot = rotationXY( t, cos(t * 0.3f) * 0.05f );
+
+        float2 fuv = uv + (duv / nsubsamples * Float2(u, v));
+        
+        ray.org = Float3(sin(t)*3.5f, 0f, cos(t)*3.5f - 3.0f);
+        ray.dir = normalize(mul(rot, Float3((fuv - 0.5f) * aspectRatioScaler, -1.0f)));
+
+        isect.t   = 1.0e+17;
+        isect.hit = 0;
+
+        for (uniform int snum = 0; snum < 3; ++snum)
+            ray_sphere_intersect(isect, ray, spheres[snum]);
+        ray_plane_intersect(isect, ray, plane);
+
+        // Note use of 'coherent' if statement; the set of rays we
+        // trace will often all hit or all miss the scene
+        cif (isect.hit) {
+            ret = ambient_occlusion(isect, plane, spheres, rngstate);
+            ret *= invSamples * invSamples;
+
+            int offset = 3 * ((y-startY) * (endX - startX) + (x-startX));
+            atomic_add_local(&image[offset], ret);
+            atomic_add_local(&image[offset+1], ret);
+            atomic_add_local(&image[offset+2], ret);
+        }
+    }
+}
+
+static void task ao_task(
+        uniform int width, uniform int height, 
+        uniform int tileX, uniform int tileY, 
+        uniform int tileWidth, uniform int tileHeight, 
+        uniform int nsubsamples, uniform int frame, uniform float image[]
+    ) {
+    uniform int startX = tileX * tileWidth;
+    uniform int startY = tileY * tileHeight;
+    uniform int endX = startX + tileWidth;
+    ao_scanlines(startY + taskIndex, startY + taskIndex+1, width, height, startX, endX, startY, nsubsamples, frame, image);
+}
+
+
+export void main_ispc(uniform float input[], uniform unsigned int8 image[]) {
+    uniform float* uniform fimage = uniform new uniform float[input[0]*input[1]*3];
+
+    uniform int width = input[0];
+    uniform int height = input[1];
+    uniform int tileX = input[2];
+    uniform int tileY = input[3];
+    uniform int tileWidth = input[4];
+    uniform int tileHeight = input[5];
+    uniform int nsubsamples = input[6];
+    uniform int frame = input[7];
+
+    launch[tileHeight] ao_task(width, height, tileX, tileY, tileWidth, tileHeight, nsubsamples, frame, fimage);
+    sync;
+    
+    for (int i = 0, j = 0; j < input[0] * input[1] * 3; i++, j+=3) {
+        image[i] = fimage[j] * 255;
+    }
+}
+

@@ -6,6 +6,12 @@ html, body {
 input {
     width: 100%;
 }
+input[type="checkbox"] {
+    width: auto;
+}
+label {
+    font-size: 12px;
+}
 nav {
     margin: 10px;
 }
@@ -26,10 +32,16 @@ p {
 #vmoutputwidth,
 #vmoutputheight
 {
-    width: 40%;
+    width: 60px;
 }
 #vmoutputwidth {
-    margin-right: 10%;
+    margin-right: 16px;
+}
+#vmoutputtilesx,
+#vmoutputtilesy
+{
+    width: 60px;
+    margin-left: 16px;
 }
 #editorc {
   vertical-align: top;
@@ -54,7 +66,7 @@ canvas {
 }
 #container {
   width: 100%;
-  height: calc(100vh - 360px);
+  height: calc(100vh - 460px);
   border: 1px solid #eee;
   border-radius: 5px;
 }

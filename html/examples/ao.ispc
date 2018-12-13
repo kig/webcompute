@@ -269,11 +269,8 @@ export void main_ispc(uniform float input[], uniform unsigned int8 image[]) {
     launch[input[1]] ao_task(input[0], input[1], input[2], fimage);
     sync;
     
-    for (int i = 0, j = 0; j < input[0] * input[1] * 3; i+=4, j+=3) {
+    for (int i = 0, j = 0; j < input[0] * input[1] * 3; i++, j+=3) {
         image[i] = fimage[j] * 255;
-        image[i+1] = fimage[j+1] * 255;
-        image[i+2] = fimage[j+2] * 255;
-        image[i+3] = 255;
     }
 }
 

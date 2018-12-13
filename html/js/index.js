@@ -5,33 +5,55 @@ function send() {
 	var outputType = this.vmoutputtype.value;
 	var outputWidth = parseInt(this.vmoutputwidth.value);
 	var outputHeight = parseInt(this.vmoutputheight.value);
+	var outputAnimated = this.vmoutputanimated.checked;
+	var outputTilesX = parseInt(this.vmoutputtilesx.value || 1);
+	var outputTilesY = parseInt(this.vmoutputtilesy.value || 1);
+	if (outputAnimated) {
+		const canvas = document.createElement('canvas');
+		canvas.width = outputWidth * outputTilesX;
+		canvas.height = outputHeight * outputTilesY;
+		document.getElementById('output').append(canvas);
+	}
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		async onResponse(res, input, runJob) {
-			const output = document.createElement('span');
-			document.getElementById('output').append(output);
+		async onResponse(res, input, runJob, jobIdx) {
+			var tileCount = (outputTilesX * outputTilesY);
+			var frame = Math.floor(jobIdx / tileCount);
+			var tileIdx = jobIdx - (frame * tileCount);
+			var y = Math.floor(tileIdx / outputTilesX);
+			var x = tileIdx - (y * outputTilesX);
+			var output = null;
+			if (!outputAnimated) {
+				output = document.createElement('span');
+				document.getElementById('output').append(output);
+			}
 			const arrayBuffer = await Cluster.responseToArrayBuffer(res, (header) => {
-				output.textContent = JSON.stringify(header);
+				if (!outputAnimated) {
+					output.textContent = JSON.stringify(header);
+				}
 			});
 			if (arrayBuffer.header.type === 'error') {
-				output.remove();
+				if (!outputAnimated) {
+					output.remove();
+				}
 				runJob(input);
 			} else {
-				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight);
+				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 			}
 		}
 	});
 }
 
 
-function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight) {
+function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	const resultHeader = arrayBuffer.header;
+	var targetCanvas = outputAnimated && document.querySelector('#output canvas');
 	if (resultHeader.type === 'image/ppm' || outputType === 'ppm') {
-		output.append(ppmToCanvas(new Uint8Array(arrayBuffer)));
+		targetCanvas = ppmToCanvas(new Uint8Array(arrayBuffer), targetCanvas);
 	} else {
 		var resultArray = null;
 		var outputFunc = (txt) => document.createTextNode(txt);
@@ -49,7 +71,23 @@ function processResponse(arrayBuffer, output, outputType, outputWidth, outputHei
 
 		}
 
-		output.append(outputFunc(resultArray, outputWidth, outputHeight));
+		if (outputTilesX > 1 || outputTilesY > 1) {
+			if (!window.tileCanvas) {
+				window.tileCanvas = document.createElement('canvas');
+				window.tileCanvas.width = outputWidth;
+				window.tileCanvas.height = outputHeight;
+			}
+			outputFunc(resultArray, outputWidth, outputHeight, tileCanvas);
+			var ctx = targetCanvas.getContext('2d');
+			ctx.globalCompositeOperator = 'copy';
+			ctx.drawImage(tileCanvas, x * tileCanvas.width, y * tileCanvas.height);
+
+		} else {
+			targetCanvas = outputFunc(resultArray, outputWidth, outputHeight, targetCanvas);
+		}
+	}
+	if (!outputAnimated) {
+		output.append(targetCanvas);
 	}
 }
 

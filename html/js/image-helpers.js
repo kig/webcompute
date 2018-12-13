@@ -1,4 +1,4 @@
-var ppmToCanvas = function (u8) {
+var ppmToCanvas = function (u8, canvas) {
     var header = u8.slice(0, u8.indexOf(10));
     var dimensions = u8.slice(header.length + 1, u8.indexOf(10, header.length + 1));
     var maxValue = u8.slice(header.length + dimensions.length + 2, u8.indexOf(10, header.length + dimensions.length + 2));
@@ -6,7 +6,7 @@ var ppmToCanvas = function (u8) {
     var dstr = String.fromCharCode.apply(null, dimensions);
     var mstr = String.fromCharCode.apply(null, maxValue);
     var [width, height] = dstr.split(/\\s+/).map((x) => parseInt(x));
-    var canvas = document.createElement('canvas');
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -20,8 +20,8 @@ var ppmToCanvas = function (u8) {
     return canvas;
 }
 
-var rawGrayUint8ToCanvas = function (u8, width, height) {
-    var canvas = document.createElement('canvas');
+var rawGrayUint8ToCanvas = function (u8, width, height, canvas) {
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -33,8 +33,8 @@ var rawGrayUint8ToCanvas = function (u8, width, height) {
     return canvas;
 };
 
-var rawRGBAUint8ToCanvas = function (u8, width, height) {
-    var canvas = document.createElement('canvas');
+var rawRGBAUint8ToCanvas = function (u8, width, height, canvas) {
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -46,8 +46,8 @@ var rawRGBAUint8ToCanvas = function (u8, width, height) {
     return canvas;
 };
 
-var rawGrayUint32ToCanvas = function (u32, width, height) {
-    var canvas = document.createElement('canvas');
+var rawGrayUint32ToCanvas = function (u32, width, height, canvas) {
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -59,8 +59,8 @@ var rawGrayUint32ToCanvas = function (u32, width, height) {
     return canvas;
 };
 
-var rawGrayFloat32ToCanvas = function (f32, width, height) {
-    var canvas = document.createElement('canvas');
+var rawGrayFloat32ToCanvas = function (f32, width, height, canvas) {
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -72,8 +72,8 @@ var rawGrayFloat32ToCanvas = function (f32, width, height) {
     return canvas;
 };
 
-var rawRGBAFloat32ToCanvas = function (f32, width, height) {
-    var canvas = document.createElement('canvas');
+var rawRGBAFloat32ToCanvas = function (f32, width, height, canvas) {
+    canvas = canvas || document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -86,6 +86,9 @@ var rawRGBAFloat32ToCanvas = function (f32, width, height) {
 };
 
 async function sha256(message) {
+    if (! (window.crypto && window.crypto.subtle && window.crypto.subtle.digest)) {
+        return message;
+    }
 
     // encode as UTF-8
     const msgBuffer = new TextEncoder('utf-8').encode(message);

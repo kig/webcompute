@@ -77,7 +77,7 @@ class Cluster {
 		var cluster = this.parse(nodes);
 		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
-		var runJob = (input) => {
+		var runJob = (input, jobIdx) => {
 			cluster.getNode(async (node) => {
 				const program = await cluster.build(node, name, source);
 				if (!program) {
@@ -95,7 +95,7 @@ class Cluster {
 					cluster.disableNode(node);
 					runJob(input);
 				}
-				return onResponse(res, input, runJob);
+				return onResponse(res, input, runJob, jobIdx);
 			});
 		};
 		inputs.forEach(runJob);
