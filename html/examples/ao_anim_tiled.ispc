@@ -1009,7 +1009,6 @@ static void task ao_task(
 
 
 export void main_ispc(uniform float input[], uniform unsigned int8 image[]) {
-    uniform float* uniform fimage = uniform new uniform float[input[0]*input[1]*3];
 
     uniform int width = input[0];
     uniform int height = input[1];
@@ -1020,10 +1019,12 @@ export void main_ispc(uniform float input[], uniform unsigned int8 image[]) {
     uniform int nsubsamples = input[6];
     uniform int frame = input[7];
 
+    uniform float* uniform fimage = uniform new uniform float[tileWidth*tileHeight*3];
+
     launch[tileHeight] ao_task(width, height, tileX, tileY, tileWidth, tileHeight, nsubsamples, frame, fimage);
     sync;
     
-    for (int i = 0, j = 0; j < input[0] * input[1] * 3; i++, j+=3) {
+    for (int i = 0, j = 0; j < tileWidth * tileHeight * 3; i++, j+=3) {
         image[i] = fimage[j] * 255;
     }
 }
