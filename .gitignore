@@ -1,4 +1,5 @@
 ispc/build/targets
+spirv/build/targets
 node_modules
 *~
 \#*\#
