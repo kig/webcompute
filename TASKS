@@ -1,3 +1,12 @@
+NEXT STEPS
+- GLSL -> ISPC -> bin -> RUN! locally
+    [X!] BOOM DONE!
+    - runner with stdin-stdout map locally
+        [!x¡] BOOM DONE!
+
+
+
+
 TASKS
     [] GLSL Compute Shader runner
         [x] Compile GLSL shader to SPIRV
@@ -6,10 +15,10 @@ TASKS
             [] /build instance
             [] /new instance
             [] runner.cpp -like semantics
-        [] ISPC runner app
+        [x] ISPC runner app
             [x] Compile GLSL shader to ISPC
-            [] Add launch[x,y,z] to spirv-to-ISPC output
-            [] Add runner.cpp -like semantics
+            [x] Add launch[x,y,z] to spirv-to-ISPC output
+            [x] Add runner.cpp -like semantics
         [] Front-end
             [] Send GLSL shader to ISPC and Vulkan targets: 
                 /new {language: 'glsl', target: 'vulkan', device: 0}
