@@ -1,0 +1,27 @@
+TASKS
+    [] GLSL Compute Shader runner
+        [x] Compile GLSL shader to SPIRV
+        [] Vulkan runner app
+            [x] Compile makefile
+            [] /build instance
+            [] /new instance
+            [] runner.cpp -like semantics
+        [] ISPC runner app
+            [x] Compile GLSL shader to ISPC
+            [] Add launch[x,y,z] to spirv-to-ISPC output
+            [] Add runner.cpp -like semantics
+        [] Front-end
+            [] Send GLSL shader to ISPC and Vulkan targets: 
+                /new {language: 'glsl', target: 'vulkan', device: 0}
+                /new {language: 'glsl', target: 'ispc'}
+                - That's... it?
+        [] Backend
+            [] Vulkan device enumeration in node info
+
+    [] Distribution network
+        [] Latency limit to restrict node selection
+        [] Job distribution network
+        [] Reducer network
+
+
+
