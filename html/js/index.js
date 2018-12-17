@@ -20,30 +20,40 @@ function send() {
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		async onResponse(res, input, runJob, jobIdx) {
-			var tileCount = (outputTilesX * outputTilesY);
-			var frame = Math.floor(jobIdx / tileCount);
-			var tileIdx = jobIdx - (frame * tileCount);
-			var y = Math.floor(tileIdx / outputTilesX);
-			var x = tileIdx - (y * outputTilesX);
-			var output = null;
-			if (!outputAnimated) {
-				output = document.createElement('span');
-				document.getElementById('output').append(output);
-			}
-			const arrayBuffer = await Cluster.responseToArrayBuffer(res, (header) => {
+		onResponse: function (res, input, runJob, jobIdx) {
+			return new Promise(async (resolve, reject) => {
+				var tileCount = (outputTilesX * outputTilesY);
+				var frame = Math.floor(jobIdx / tileCount);
+				var tileIdx = jobIdx - (frame * tileCount);
+				var y = Math.floor(tileIdx / outputTilesX);
+				var x = tileIdx - (y * outputTilesX);
+				var output = null;
 				if (!outputAnimated) {
-					output.textContent = JSON.stringify(header);
+					output = document.createElement('span');
+					document.getElementById('output').append(output);
+				}
+				const arrayBuffer = await Cluster.responseToArrayBuffer(
+					res,
+					(header) => {
+						if (!outputAnimated) {
+							output.textContent = JSON.stringify(header);
+						}
+					},
+					(d) => {
+						if (d.byteLength > 0) {
+							resolve();
+						}
+					}
+				);
+				if (arrayBuffer.header.type === 'error') {
+					if (!outputAnimated) {
+						output.remove();
+					}
+					runJob(input);
+				} else {
+					processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 				}
 			});
-			if (arrayBuffer.header.type === 'error') {
-				if (!outputAnimated) {
-					output.remove();
-				}
-				runJob(input);
-			} else {
-				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
-			}
 		}
 	});
 }
