@@ -90,9 +90,9 @@ private:
     VkDeviceMemory bufferMemory;
 
     /*
-    The mandelbrot set will be rendered to this buffer.
+    The dimensions of the resulting image are stored here.
 
-    The memory that backs the buffer is bufferMemory. 
+    The memory that backs the buffer is inputBufferMemory. 
     */
     VkBuffer inputBuffer;
     VkDeviceMemory inputBufferMemory;
@@ -121,24 +121,30 @@ private:
     This variable keeps track of the index of that queue in its family. 
     */
     uint32_t queueFamilyIndex;
+  
+    uint32_t workSize[3] = {1, 1, 1};
+    char *input;
 
 public:
     void run() {
-        // Buffer size of the storage buffer that will contain the rendered mandelbrot set.
-        bufferSize = 4 * 4 * 3200 * 2400;
-        inputBufferSize = 2 * 4;
+        readInput();
 
         // Initialize vulkan:
         createInstance();
         findPhysicalDevice();
         createDevice();
 
+	// printf("createDevice done\n");
+
         // Create input and output buffers
         createBuffer();
+
+	// printf("createBuffer done\n");
 
         createDescriptorSetLayout();
         createDescriptorSet();
 
+	// printf("createDescriptorSet done\n");
 
         // for all shaders { ...
 
@@ -149,13 +155,13 @@ public:
 
                 // Write stdin to input buffer
                 writeInput();
-
+		
                 // Finally, run the recorded command buffer.
                 runCommandBuffer();
 
                 // Write the output buffer to stdout
-                // writeOutput();
-
+                writeOutput();
+		
             // ... }
 
         // ... }
@@ -164,14 +170,54 @@ public:
         cleanup();
     }
 
+    void readInput() {
+        ssize_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
+
+	int output_size = 0;
+
+	read_bytes = fread(&output_size, 1, 4, stdin);
+
+	if (read_bytes < 4)
+	{
+	  output_size = 4;
+	}
+
+	read_bytes = fread(workSize, 4, 3, stdin);
+
+	input = (char *)malloc(input_buffer_size);
+	do
+	{
+	    read_bytes = fread((void *)(input + input_length), 1, 4096, stdin);
+	    input_length += read_bytes;
+	    if (input_length + 4096 > input_buffer_size)
+	    {
+	        input_buffer_size *= 2;
+	        input = (char *)realloc((void *)input, input_buffer_size);
+	    }
+	} while (!feof(stdin));
+
+	inputBufferSize = input_length;
+	bufferSize = output_size;
+
+    }
+
     void writeInput() {
         void* mappedMemory = NULL;
         // Map the buffer memory, so that we can read from it on the CPU.
         vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedMemory);
-        float* dims = (float *)mappedMemory;
-        dims[0] = 3200.0f;
-        dims[1] = 2400.0f;
-        VkBufferCopy
+
+	memcpy(mappedMemory, input, inputBufferSize);
+	free(input);
+
+	VkMappedMemoryRange inputBufferMemoryRange = {
+	  .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+	  .pNext = NULL,
+	  .memory = inputBufferMemory,
+	  .offset = 0,
+	  .size = VK_WHOLE_SIZE
+	};
+
+	vkFlushMappedMemoryRanges(device, 1, &inputBufferMemoryRange);
         vkUnmapMemory(device, inputBufferMemory);
     }
 
@@ -179,6 +225,17 @@ public:
         void* mappedMemory = NULL;
         // Map the buffer memory, so that we can read from it on the CPU.
         vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
+
+	VkMappedMemoryRange bufferMemoryRange = {
+	  .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+	  .pNext = NULL,
+	  .memory = bufferMemory,
+	  .offset = 0,
+	  .size = VK_WHOLE_SIZE
+	};
+
+	vkFlushMappedMemoryRanges(device, 1, &bufferMemoryRange);
+	
         float* pmappedMemory = (float *)mappedMemory;
 
         fwrite(mappedMemory, bufferSize, 1, stdout);
@@ -497,7 +554,7 @@ public:
         this flag.
         */
         allocateInfo.memoryTypeIndex = findMemoryType(
-            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory)); // allocate memory on device.
         
@@ -547,7 +604,7 @@ public:
         this flag.
         */
         allocateInfo.memoryTypeIndex = findMemoryType(
-            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &inputBufferMemory)); // allocate memory on device.
         
@@ -558,111 +615,96 @@ public:
     }
 
     void createDescriptorSetLayout() {
-        /*
-        Here we specify a descriptor set layout. This allows us to bind our descriptors to 
-        resources in the shader. 
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2] = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
+            }
+        };
 
-        */
-
-        /*
-        Here we specify a binding of type VK_DESCRIPTOR_TYPE_STORAGE_BUFFER to the binding point
-        0. This binds to 
-
-          layout(std140, binding = 0) buffer buf
-
-        in the compute shader.
-        */
-        VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
-        descriptorSetLayoutBinding.binding = 0; // binding = 0
-        descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorSetLayoutBinding.descriptorCount = 1;
-        descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-        descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.bindingCount = 1; // only a single binding in this descriptor set layout. 
-        descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding; 
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = descriptorSetLayoutBindings
+        };
 
         // Create the descriptor set layout. 
         VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
+	//printf("createDescriptorSetLayout done\n");
     }
 
     void createDescriptorSet() {
-        /*
-        So we will allocate a descriptor set here.
-        But we need to first create a descriptor pool to do that. 
-        */
+        VkDescriptorPoolSize descriptorPoolSize = {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 2
+        };
 
-        /*
-        Our descriptor pool can only allocate a single storage buffer.
-        */
-        VkDescriptorPoolSize descriptorPoolSize = {};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 2;
-
-        VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
-        descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolCreateInfo.maxSets = 2; // we only need to allocate one descriptor set from the pool.
-        descriptorPoolCreateInfo.poolSizeCount = 2;
-        descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+        VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = 1,
+            .poolSizeCount = 1,
+            .pPoolSizes = &descriptorPoolSize
+        };
 
         // create descriptor pool.
         VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
+	//printf("vkCreateDescriptorPool done\n");
 
         /*
         With the pool allocated, we can now allocate the descriptor set. 
         */
-        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
-        descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO; 
-        descriptorSetAllocateInfo.descriptorPool = descriptorPool; // pool to allocate from.
-        descriptorSetAllocateInfo.descriptorSetCount = 1; // allocate a single descriptor set.
-        descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = descriptorPool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &descriptorSetLayout
+        };
 
         // allocate descriptor set.
         VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
+	//printf("vkAllocateDescriptorSets done\n");
 
-        /*
-        Next, we need to connect our actual storage buffer with the descrptor. 
-        We use vkUpdateDescriptorSets() to update the descriptor set.
-        */
+        VkDescriptorBufferInfo inputDescriptorBufferInfo = {
+            .buffer = inputBuffer,
+            .offset = 0,
+            .range = inputBufferSize
+        };
 
-        {
-            // Specify the buffer to bind to the descriptor.
-            VkDescriptorBufferInfo descriptorBufferInfo = {};
-            descriptorBufferInfo.buffer = inputBuffer;
-            descriptorBufferInfo.offset = 0;
-            descriptorBufferInfo.range = inputBufferSize;
+        VkDescriptorBufferInfo outputDescriptorBufferInfo = {
+            .buffer = buffer,
+            .offset = 0,
+            .range = bufferSize
+        };
 
-            VkWriteDescriptorSet writeDescriptorSet = {};
-            writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeDescriptorSet.dstSet = descriptorSet; // write to this descriptor set.
-            writeDescriptorSet.dstBinding = 0; // write to the first, and only binding.
-            writeDescriptorSet.descriptorCount = 1; // update a single descriptor.
-            writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-            writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
+        VkWriteDescriptorSet writeDescriptorSets[2] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptorSet,
+                .dstBinding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = &inputDescriptorBufferInfo,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptorSet,
+                .dstBinding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = &outputDescriptorBufferInfo,
+            }
+        };
 
-            // perform the update of the descriptor set.
-            vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
-        }
-
-        // Specify the buffer to bind to the descriptor.
-        VkDescriptorBufferInfo descriptorBufferInfo = {};
-        descriptorBufferInfo.buffer = buffer;
-        descriptorBufferInfo.offset = 0;
-        descriptorBufferInfo.range = bufferSize;
-
-        VkWriteDescriptorSet writeDescriptorSet = {};
-        writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSet.dstSet = descriptorSet; // write to this descriptor set.
-        writeDescriptorSet.dstBinding = 1; // write to the first, and only binding.
-        writeDescriptorSet.descriptorCount = 1; // update a single descriptor.
-        writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
-
-        // perform the update of the descriptor set.
-        vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
-
-
+        vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
+	//printf("vkUpdateDescriptorSets done\n");
     }
 
     // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -722,34 +764,36 @@ public:
 
         So first we specify the compute shader stage, and it's entry point(main).
         */
-        VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-        shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        shaderStageCreateInfo.module = computeShaderModule;
-        shaderStageCreateInfo.pName = "main";
+        VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+            .module = computeShaderModule,
+            .pName = "main"
+        };
 
         /*
         The pipeline layout allows the pipeline to access descriptor sets. 
         So we just specify the descriptor set layout we created earlier.
         */
-        VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-        pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutCreateInfo.setLayoutCount = 1;
-        pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout; 
+        VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &descriptorSetLayout
+        };
         VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
 
-        VkComputePipelineCreateInfo pipelineCreateInfo = {};
-        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineCreateInfo.stage = shaderStageCreateInfo;
-        pipelineCreateInfo.layout = pipelineLayout;
+        VkComputePipelineCreateInfo pipelineCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage = shaderStageCreateInfo,
+            .layout = pipelineLayout
+        };
 
         /*
         Now, we finally create the compute pipeline. 
         */
-        VK_CHECK_RESULT(vkCreateComputePipelines(
-            device, VK_NULL_HANDLE,
-            1, &pipelineCreateInfo,
-            NULL, &pipeline));
+        VK_CHECK_RESULT(
+            vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline)
+        );
     }
 
     void createCommandBuffer() {
@@ -800,7 +844,7 @@ public:
         The number of workgroups is specified in the arguments.
         If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
         */
-        vkCmdDispatch(commandBuffer, (uint32_t)ceil(3200 / float(32)), (uint32_t)ceil(2400 / float(32)), 1);
+        vkCmdDispatch(commandBuffer, workSize[0], workSize[1], workSize[2]);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
