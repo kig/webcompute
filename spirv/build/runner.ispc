@@ -1,5 +1,10 @@
 #include "program.ispc"
 
+void program_ispc_main(varying struct int3 a, uniform struct inputs & b, uniform struct outputs & c)
+{
+    program_ispc_main(a, c, b);
+}
+
 task
 void runner_tiled(uniform int3 gl_NumWorkGroups, uniform struct inputs& input, uniform struct outputs& output)
 {

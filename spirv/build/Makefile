@@ -5,10 +5,10 @@ FLAGS=
 TARGET=kernel
 BITS=64
 
-PLATFORM=macos
+PLATFORM=linux
 ARCH=x86-64
 
-MY_PLATFORM=macos
+MY_PLATFORM=linux
 MY_ARCH=x86-64
 
 default: spirv ispc-cross

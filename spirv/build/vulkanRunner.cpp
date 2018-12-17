@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <stdexcept>
 #include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define NDEBUG
 
@@ -86,8 +88,17 @@ private:
     */
     VkBuffer buffer;
     VkDeviceMemory bufferMemory;
-        
+
+    /*
+    The mandelbrot set will be rendered to this buffer.
+
+    The memory that backs the buffer is bufferMemory. 
+    */
+    VkBuffer inputBuffer;
+    VkDeviceMemory inputBufferMemory;
+
     uint32_t bufferSize; // size of `buffer` in bytes.
+    uint32_t inputBufferSize; // size of `inputBuffer` in bytes.
 
     std::vector<const char *> enabledLayers;
 
@@ -114,7 +125,8 @@ private:
 public:
     void run() {
         // Buffer size of the storage buffer that will contain the rendered mandelbrot set.
-        bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
+        bufferSize = 4 * 4 * 3200 * 2400;
+        inputBufferSize = 2 * 4;
 
         // Initialize vulkan:
         createInstance();
@@ -142,7 +154,7 @@ public:
                 runCommandBuffer();
 
                 // Write the output buffer to stdout
-                writeOutput();
+                // writeOutput();
 
             // ... }
 
@@ -152,24 +164,27 @@ public:
         cleanup();
     }
 
-    void saveRenderedImage() {
+    void writeInput() {
+        void* mappedMemory = NULL;
+        // Map the buffer memory, so that we can read from it on the CPU.
+        vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedMemory);
+        float* dims = (float *)mappedMemory;
+        dims[0] = 3200.0f;
+        dims[1] = 2400.0f;
+        VkBufferCopy
+        vkUnmapMemory(device, inputBufferMemory);
+    }
+
+    void writeOutput() {
         void* mappedMemory = NULL;
         // Map the buffer memory, so that we can read from it on the CPU.
         vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
-        Pixel* pmappedMemory = (Pixel *)mappedMemory;
+        float* pmappedMemory = (float *)mappedMemory;
 
-		printf("P6\n3200 2400\n255\n");
-        // Get the color data from the buffer, and cast it to bytes.
-        // We save the data to a vector.
-        for (int i = 0; i < WIDTH*HEIGHT; i += 1) {
-            putc((unsigned char)(255.0f * (pmappedMemory[i].r)),stdout);
-            putc((unsigned char)(255.0f * (pmappedMemory[i].g)),stdout);
-            putc((unsigned char)(255.0f * (pmappedMemory[i].b)),stdout);
-            // putc((unsigned char)(255.0f * (pmappedMemory[i].a)),stdout);
-        }
+        fwrite(mappedMemory, bufferSize, 1, stdout);
+
         // Done reading, so unmap.
         vkUnmapMemory(device, bufferMemory);
-
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
@@ -488,6 +503,58 @@ public:
         
         // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory. 
         VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+
+
+        {
+
+        /*
+        We will now create a buffer. We will render the mandelbrot set into this buffer
+        in a computer shade later. 
+        */
+        
+        VkBufferCreateInfo bufferCreateInfo = {};
+        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferCreateInfo.size = inputBufferSize; // buffer size in bytes. 
+        bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+        VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &inputBuffer)); // create buffer.
+
+        /*
+        But the buffer doesn't allocate memory for itself, so we must do that manually.
+        */
+    
+        /*
+        First, we find the memory requirements for the buffer.
+        */
+        VkMemoryRequirements memoryRequirements;
+        vkGetBufferMemoryRequirements(device, inputBuffer, &memoryRequirements);
+        
+        /*
+        Now use obtained memory requirements info to allocate the memory for the buffer.
+        */
+        VkMemoryAllocateInfo allocateInfo = {};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocateInfo.allocationSize = memoryRequirements.size; // specify required memory.
+        /*
+        There are several types of memory that can be allocated, and we must choose a memory type that:
+
+        1) Satisfies the memory requirements(memoryRequirements.memoryTypeBits). 
+        2) Satifies our own usage requirements. We want to be able to read the buffer memory from the GPU to the CPU
+           with vkMapMemory, so we set VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT. 
+        Also, by setting VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memory written by the device(GPU) will be easily 
+        visible to the host(CPU), without having to call any extra flushing commands. So mainly for convenience, we set
+        this flag.
+        */
+        allocateInfo.memoryTypeIndex = findMemoryType(
+            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &inputBufferMemory)); // allocate memory on device.
+        
+        // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory. 
+        VK_CHECK_RESULT(vkBindBufferMemory(device, inputBuffer, inputBufferMemory, 0));
+
+        }
     }
 
     void createDescriptorSetLayout() {
@@ -531,12 +598,12 @@ public:
         */
         VkDescriptorPoolSize descriptorPoolSize = {};
         descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 1;
+        descriptorPoolSize.descriptorCount = 2;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolCreateInfo.maxSets = 1; // we only need to allocate one descriptor set from the pool.
-        descriptorPoolCreateInfo.poolSizeCount = 1;
+        descriptorPoolCreateInfo.maxSets = 2; // we only need to allocate one descriptor set from the pool.
+        descriptorPoolCreateInfo.poolSizeCount = 2;
         descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
 
         // create descriptor pool.
@@ -559,6 +626,25 @@ public:
         We use vkUpdateDescriptorSets() to update the descriptor set.
         */
 
+        {
+            // Specify the buffer to bind to the descriptor.
+            VkDescriptorBufferInfo descriptorBufferInfo = {};
+            descriptorBufferInfo.buffer = inputBuffer;
+            descriptorBufferInfo.offset = 0;
+            descriptorBufferInfo.range = inputBufferSize;
+
+            VkWriteDescriptorSet writeDescriptorSet = {};
+            writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDescriptorSet.dstSet = descriptorSet; // write to this descriptor set.
+            writeDescriptorSet.dstBinding = 0; // write to the first, and only binding.
+            writeDescriptorSet.descriptorCount = 1; // update a single descriptor.
+            writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
+            writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
+
+            // perform the update of the descriptor set.
+            vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+        }
+
         // Specify the buffer to bind to the descriptor.
         VkDescriptorBufferInfo descriptorBufferInfo = {};
         descriptorBufferInfo.buffer = buffer;
@@ -568,13 +654,15 @@ public:
         VkWriteDescriptorSet writeDescriptorSet = {};
         writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeDescriptorSet.dstSet = descriptorSet; // write to this descriptor set.
-        writeDescriptorSet.dstBinding = 0; // write to the first, and only binding.
+        writeDescriptorSet.dstBinding = 1; // write to the first, and only binding.
         writeDescriptorSet.descriptorCount = 1; // update a single descriptor.
         writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
         writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
 
         // perform the update of the descriptor set.
         vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+
+
     }
 
     // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -618,7 +706,7 @@ public:
         uint32_t filelength;
         // the code in comp.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t* code = readFile(filelength, "shaders/comp.spv");
+        uint32_t* code = readFile(filelength, "program.spv");
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code;
@@ -712,7 +800,7 @@ public:
         The number of workgroups is specified in the arguments.
         If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
         */
-        vkCmdDispatch(commandBuffer, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
+        vkCmdDispatch(commandBuffer, (uint32_t)ceil(3200 / float(32)), (uint32_t)ceil(2400 / float(32)), 1);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
@@ -768,6 +856,7 @@ public:
 
         vkFreeMemory(device, bufferMemory, NULL);
         vkDestroyBuffer(device, buffer, NULL);	
+        vkDestroyBuffer(device, inputBuffer, NULL);	
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
