@@ -5,13 +5,13 @@ FLAGS=
 TARGET=kernel
 BITS=64
 
-PLATFORM=linux
-ARCH=x86-64
+MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/)
+MY_ARCH := $(shell uname -m | tr _ -)
 
-MY_PLATFORM=linux
-MY_ARCH=x86-64
+PLATFORM := $(MY_PLATFORM)
+ARCH := $(MY_ARCH)
 
-default: spirv ispc-cross
+default: spirv ispc-cross ispc ispc-bin
 
 spirv:
 	mkdir -p targets/$(TARGET)
@@ -19,10 +19,10 @@ spirv:
 
 runner:
 	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lm -lstdc++ $(FOMP) $(OMP)
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -std=c++11 -lvulkan -lpthread -lm -lstdc++ $(FOMP) $(OMP)
 
 ispc-runner:
-	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp
+	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11
 
 ispc-cross:
 	../$(SPIRV_CROSS_ISPC)-$(MY_PLATFORM)-$(MY_ARCH) --ispc targets/$(TARGET)/program.spv --output targets/$(TARGET)/program.ispc
@@ -33,6 +33,6 @@ ispc:
 	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
 
 ispc-bin:
-	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program -lm -lstdc++ -lpthread
+	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program -lm -lstdc++ -lpthread -std=c++11
 
 all: runner ispc-runner spirv ispc-cross ispc ispc-bin
