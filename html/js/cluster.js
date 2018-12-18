@@ -4,6 +4,13 @@ class Cluster {
 		this.buildNodes = nodes.filter(n => n.info.canBuild);
 		this.nodes = nodes;
 		this.availableNodes = nodes.slice();
+		this.availableSPIRVNodes = [];
+		nodes.forEach(n => {
+			(n.vulkanDevices || []).forEach((vd, idx) => {
+				this.availableSPIRVNodes.push({...n, vulkanDeviceIndex: idx});
+			});
+			this.availableSPIRVNodes.push(n);
+		});
 		this.workQueue = [];
 	}
 
@@ -68,10 +75,12 @@ class Cluster {
 		const {
 			nodes,
 			name,
+			language,
 			source,
 			params,
 			outputLength,
-			onResponse
+			onResponse,
+			workgroups
 		} = options;
 		var green = '';
 		var cluster = this.parse(nodes);
@@ -84,7 +93,7 @@ class Cluster {
 					cluster.disableNode(node);
 					return runJob(input);
 				}
-				const args = { input, outputLength, binary: program.isBinary };
+				const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
 				const bin = program.blob;
 				const body = new Blob([ JSON.stringify(args), '\n', bin ]);
 				const url = node.url + vmSuffix;
@@ -104,24 +113,6 @@ class Cluster {
 
 	static parse(nodeString) {
 		return new Cluster(JSON.parse(nodeString));
-
-		const defaultParams = { canBuild: 'true', arch: 'x86-64', target: 'avx2-i32x16', addressing: '32' };
-		const nodes = nodeString.split(",").map(s => s.replace(/\s+/, '')).filter(s => s !== '').map(n => {
-			var [url, ...paramList] = n.split(';');
-			const params = paramList.reduce((obj, p) => {
-				var [k, v] = p.split("=");
-				obj[k] = v;
-				return obj
-			}, {})
-			if (!url.includes(":")) {
-				url = "http://" + url + ":7172";
-			}
-			return { url, ...defaultParams, ...params };
-		});
-		if (nodes.length === 0) {
-			nodes.push({ url: '', ...defaultParams });
-		}
-		return new Cluster(nodes);
 	}
 
 	static expandParam(param) {

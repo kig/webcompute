@@ -4,7 +4,7 @@ html, body {
   font-family: sans-serif;
 }
 input {
-    width: 100%;
+    width: 45%;
 }
 input[type="checkbox"] {
     width: auto;
@@ -67,7 +67,7 @@ canvas {
 #container {
   width: 100%;
   height: calc(100vh - 640px);
-  min-height: 400px;
+  min-height: 300px;
   border: 1px solid #eee;
   border-radius: 5px;
 }

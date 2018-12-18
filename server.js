@@ -190,23 +190,27 @@ var getCPUFreq = function (nodeInfo) {
 
 var getVulkanDevices = function () {
     try {
-        var infoString = execSync(`vulkaninfo`).toString();
+        var infoString = execSync(`. ~/.bashrc; vulkaninfo`).toString();
         var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execSync(`vulkaninfo --json=${index}`).toString());
-            var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.join(",");
+            var info = JSON.parse(execSync(`. ~/.bashrc; vulkaninfo --json=${index}`).toString());
+            var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;
                 uniqGPUs.push(info);
             }
         });
-        uniqGPUs.forEach(gpu => 
-            console.log("Found Vulkan device", gpu.VkPhysicalDeviceProperties.deviceName, gpu.VkPhysicalDeviceProperties.pipelineCacheUUID.join(","))
+        uniqGPUs.forEach(gpu =>
+            console.log(
+                "Found Vulkan device",
+                gpu.VkPhysicalDeviceProperties.deviceName,
+                gpu.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("")
+            )
         );
         return uniqGPUs;
-    } catch(e) {
+    } catch (e) {
         return [];
     }
 }
@@ -274,55 +278,134 @@ const runVM_ = function (name, body, res) {
         const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
         const program = body.slice(firstLine + 1);
 
-        const programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
-        const i32 = new Int32Array(programInput, 0, 1);
-        i32[0] = programInputObj.outputLength;
-        const f32 = new Float32Array(programInput, 4);
-        f32.set(programInputObj.input);
-
         var programHash = crypto.createHash('sha256').update(program).digest('hex');
-        var target = BuildTarget.cpusig + '/' + programHash;
+        var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
 
-        if (!fs.existsSync(`./ispc/build/targets/${target}/program`)) {
-            if (!fs.existsSync(`./ispc/build/targets/${target}`)) {
-                execFileSync('mkdir', ['-p', `./ispc/build/targets/${target}`]);
+        var ps;
+
+        if (programInputObj.language === 'ispc') {
+
+            var programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
+            var i32 = new Int32Array(programInput, 0, 1);
+            i32[0] = programInputObj.outputLength;
+            var f32 = new Float32Array(programInput, 4);
+            f32.set(programInputObj.input);
+
+            if (!fs.existsSync(`./ispc/build/targets/${target}/program`)) {
+                if (!fs.existsSync(`./ispc/build/targets/${target}`)) {
+                    execFileSync('mkdir', ['-p', `./ispc/build/targets/${target}`]);
+                }
+                if (programInputObj.executable) {
+                    fs.writeFileSync(`./ispc/build/targets/${target}/program`, program);
+                } else if (programInputObj.binary) {
+                    fs.writeFileSync(`./ispc/build/targets/${target}/program.o`, program);
+                    execFileSync('/usr/bin/make', [
+                        `TARGET=${target}`,
+                        `PLATFORM=${BuildTarget.platform}`,
+                        `ARCH=${BuildTarget.arch}`,
+                        `MY_PLATFORM=${BuildTarget.platform}`,
+                        `MY_ARCH=${BuildTarget.arch}`,
+                        `link`
+                    ], { cwd: './ispc/build' });
+                } else {
+                    fs.writeFileSync(`./ispc/build/targets/${target}/program.ispc`, program);
+                    execFileSync('/usr/bin/make', [
+                        `TARGET=${target}`,
+                        `PLATFORM=${BuildTarget.platform}`,
+                        `ARCH=${BuildTarget.arch}`,
+                        `MY_PLATFORM=${BuildTarget.platform}`,
+                        `MY_ARCH=${BuildTarget.arch}`,
+                        `ispc`,
+                        `link`
+                    ], { cwd: './ispc/build' });
+                }
             }
-            if (programInputObj.executable) {
-                fs.writeFileSync(`./ispc/build/targets/${target}/program`, program);
-            } else if (programInputObj.binary) {
-                fs.writeFileSync(`./ispc/build/targets/${target}/program.o`, program);
+
+            fs.writeFileSync(`./ispc/build/targets/${target}/input`, Buffer.from(programInput));
+
+            ps = execFile(`./targets/${target}/program`, [], {
+                encoding: 'buffer',
+                stdio: ['pipe', 'pipe', 'inherit'],
+                maxBuffer: Infinity,
+                // Set OMP_NUM_THREADS=8 for Android targets
+                env: { ...process.env, 'OMP_NUM_THREADS': '8' },
+                cwd: './ispc/build'
+            });
+
+        } else if (programInputObj.language === 'glsl') {
+            var programInput = new ArrayBuffer(programInputObj.input.length * 4 + 20);
+            var i32 = new Int32Array(programInput, 0, 5);
+            i32[0] = programInputObj.outputLength;
+            i32[1] = programInputObj.vulkanDeviceIndex || -1;
+            i32[2] = programInputObj.workgroups[0];
+            i32[3] = programInputObj.workgroups[1];
+            i32[4] = programInputObj.workgroups[2];
+            var f32 = new Float32Array(programInput, 20);
+            f32.set(programInputObj.input);
+        
+            /*
+                cd spirv/build
+                cp program.comp.glsl $TARGET/program.comp.glsl
+                make TARGET=$TARGET spirv
+            */
+            if (!fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
+                if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
+                    execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
+                }
+                fs.writeFileSync(`./spirv/build/targets/${target}/program.comp.glsl`, program);
                 execFileSync('/usr/bin/make', [
                     `TARGET=${target}`,
                     `PLATFORM=${BuildTarget.platform}`,
                     `ARCH=${BuildTarget.arch}`,
                     `MY_PLATFORM=${BuildTarget.platform}`,
                     `MY_ARCH=${BuildTarget.arch}`,
-                    `link`
-                ], { cwd: './ispc/build' });
+                    `spirv`
+                ], { cwd: './spirv/build' });
+            }
+
+            fs.writeFileSync(`./spirv/build/targets/${target}/input`, Buffer.from(programInput));
+
+            if (programInputObj.vulkanDeviceIndex !== undefined) {
+                /*
+                    Run on Vulkan
+                    bin/vulkanRunner $TARGET/program.spv <input >output
+                */
+
+                ps = execFile(`. ~/.bashrc; bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, [], {
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    maxBuffer: Infinity,
+                    cwd: './spirv/build'
+                });
+
             } else {
-                fs.writeFileSync(`./ispc/build/targets/${target}/program.ispc`, program);
+                /*
+                    Run on CPU
+                    make TARGET=$TARGET ispc-cross ispc ispc-bin
+                    $TARGET/program <input >output
+                */
                 execFileSync('/usr/bin/make', [
                     `TARGET=${target}`,
                     `PLATFORM=${BuildTarget.platform}`,
                     `ARCH=${BuildTarget.arch}`,
                     `MY_PLATFORM=${BuildTarget.platform}`,
                     `MY_ARCH=${BuildTarget.arch}`,
-                    `ispc`,
-                    `link`
-                ], { cwd: './ispc/build' });
+                    `ispc-cross`, `ispc`, `ispc-bin`
+                ], { cwd: './spirv/build' });
+
+                ps = execFile(`./targets/${target}/program`, [], {
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    maxBuffer: Infinity,
+                    // Set OMP_NUM_THREADS=8 for Android targets
+                    env: { ...process.env, 'OMP_NUM_THREADS': '8' },
+                    cwd: './spirv/build'
+                });
+
             }
+
         }
 
-        fs.writeFileSync(`./ispc/build/targets/${target}/input`, Buffer.from(programInput));
-
-        const ps = execFile(`./targets/${target}/program`, [], {
-            encoding: 'buffer',
-            stdio: ['pipe', 'pipe', 'inherit'],
-            maxBuffer: Infinity,
-            // Set OMP_NUM_THREADS=8 for Android targets
-            env: { ...process.env, 'OMP_NUM_THREADS': '8' },
-            cwd: './ispc/build'
-        });
         ps.name = findName(name);
         Object.defineProperty(ps, 'status', { get: getStatus });
 

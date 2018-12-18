@@ -26,7 +26,7 @@ ispc-runner:
 
 ispc-cross:
 	../$(SPIRV_CROSS_ISPC)-$(MY_PLATFORM)-$(MY_ARCH) --ispc targets/$(TARGET)/program.spv --output targets/$(TARGET)/program.ispc-raw
-	sed -E 's/static SPIRV_INLINE void program_ispc_main\(varying int3 gl_GlobalInvocationID,\s*uniform struct outputs& ([^,]+),\s*uniform struct inputs& ([^\)]+)/static SPIRV_INLINE void program_ispc_main\(varying int3 gl_GlobalInvocationID, uniform struct inputs\& \2, uniform struct outputs\& \1/' targets/$(TARGET)/program.ispc-raw | ruby -e 'print STDIN.read.split("export void")[0]' > targets/$(TARGET)/program.ispc
+	ruby -e 'STDIN.read.sub(/program_ispc_main\(varying int3 gl_GlobalInvocationID,\s*uniform struct outputs&\s+([^,]+),\s*uniform struct inputs&\s+([^\)]+)/, "program_ispc_main\(varying int3 gl_GlobalInvocationID, uniform struct inputs\& \\2, uniform struct outputs\& \\1").split(/^export void /)[0].display' <targets/$(TARGET)/program.ispc-raw >targets/$(TARGET)/program.ispc
 
 ispc:
 	cp runner.ispc targets/$(TARGET)/runner.ispc

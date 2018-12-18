@@ -1,3 +1,10 @@
+// OutputSize 122880000 
+// Workgroups 100 75 1
+// Inputs 3200 2400
+// OutputType float32rgba 3200 2400
+// Animated false
+// Tiles 1 1
+
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 

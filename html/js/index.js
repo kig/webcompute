@@ -8,6 +8,8 @@ function send() {
 	var outputAnimated = this.vmoutputanimated.checked;
 	var outputTilesX = parseInt(this.vmoutputtilesx.value || 1);
 	var outputTilesY = parseInt(this.vmoutputtilesy.value || 1);
+	var workgroups = this.vmworkgroups.value.replace(/\s+/g,'').split(",").map(s => parseInt(s)).slice(0,3);
+	while (workgroups.size < 3) workgroups.push(1);
 	if (outputAnimated) {
 		const canvas = document.createElement('canvas');
 		canvas.width = outputWidth * outputTilesX;
@@ -18,6 +20,7 @@ function send() {
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
 		language: this.vmlanguage.value,
+		workgroups: workgroups,
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
@@ -106,6 +109,31 @@ window.vmsrcEditor = null;
 require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
 	fetch('examples/mandel.comp.glsl').then(res => res.text()).then(text => {
+		var config = {
+			OutputSize: [4],
+			Workgroups: [1,1,1],
+			Inputs: [640, 480, 4, 0],
+			OutputType: ['uint8gray', '640', '480'],
+			Animated: ['false'],
+			Tiles: []
+		};
+		text.split("\n").forEach(line => {
+			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/);
+			if (m) {
+				var key = m[1];
+				var value = m[2].replace(/^\s+|\s+$/g, '').split(/,| +/).map(s => s.replace(/\s+/g, ''));
+				config[key] = value;
+			}
+		});
+		vmoutputsize.value = config.OutputSize[0];
+		vmworkgroups.value = config.Workgroups.join(", ");
+		vmparams.value = config.Inputs.join(", ");
+		vmoutputtype.value = config.OutputType[0] || 'text';
+		vmoutputwidth.value = config.OutputType[1] || '';
+		vmoutputheight.value = config.OutputType[2] || '';
+		vmoutputanimated.checked = config.Animated[0] === 'true';
+		vmoutputtilesx.value = config.Tiles[0] || '';
+		vmoutputtilesy.value = config.Tiles[1] || '';
 		window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
 			value: text,
 			language: 'c'
