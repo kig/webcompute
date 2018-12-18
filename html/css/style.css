@@ -74,7 +74,7 @@ canvas {
 #output {
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    display: grid;
+    /* display: grid; */
     grid-template-columns: 33% 33% 33%;
     grid-column-gap: 0.5%;
 }

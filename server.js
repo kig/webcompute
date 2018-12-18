@@ -11,7 +11,7 @@ const os = require('os');
 const bonjour = require('bonjour')({ interface: '0.0.0.0' });
 const http = require('http');
 
-const { fork, execFile, execSync, execFileSync } = require('child_process');
+const { fork, exec, execFile, execSync, execFileSync } = require('child_process');
 
 const app = express();
 const port = 7172;
@@ -336,7 +336,7 @@ const runVM_ = function (name, body, res) {
             var programInput = new ArrayBuffer(programInputObj.input.length * 4 + 20);
             var i32 = new Int32Array(programInput, 0, 5);
             i32[0] = programInputObj.outputLength;
-            i32[1] = programInputObj.vulkanDeviceIndex || -1;
+            i32[1] = programInputObj.vulkanDeviceIndex || 0;
             i32[2] = programInputObj.workgroups[0];
             i32[3] = programInputObj.workgroups[1];
             i32[4] = programInputObj.workgroups[2];
@@ -371,7 +371,7 @@ const runVM_ = function (name, body, res) {
                     bin/vulkanRunner $TARGET/program.spv <input >output
                 */
 
-                ps = execFile(`. ~/.bashrc; bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, [], {
+                ps = exec(`. ~/.bashrc; bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
                     encoding: 'buffer',
                     stdio: ['pipe', 'pipe', 'inherit'],
                     maxBuffer: Infinity,

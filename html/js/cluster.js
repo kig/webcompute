@@ -3,41 +3,42 @@ class Cluster {
 	constructor(nodes) {
 		this.buildNodes = nodes.filter(n => n.info.canBuild);
 		this.nodes = nodes;
-		this.availableNodes = nodes.slice();
-		this.availableSPIRVNodes = [];
+		this.availableNodes = {};
+		this.availableNodes.ISPC = nodes.slice();
+		this.availableNodes.SPIRV = [];
 		nodes.forEach(n => {
-			(n.vulkanDevices || []).forEach((vd, idx) => {
-				this.availableSPIRVNodes.push({...n, vulkanDeviceIndex: idx});
+			(n.info.vulkanDevices || []).forEach((vd, idx) => {
+				this.availableNodes.SPIRV.push({...n, vulkanDeviceIndex: idx});
 			});
-			this.availableSPIRVNodes.push(n);
+			this.availableNodes.SPIRV.push(n);
 		});
-		this.workQueue = [];
+		this.workQueue = {ISPC: [], SPIRV: []};
 	}
 
-	processWorkQueue() {
-		if (this.workQueue.length > 0 && this.availableNodes.length > 0) {
-			var node = this.availableNodes.shift();
+	processWorkQueue(nodeType='ISPC') {
+		if (this.workQueue[nodeType].length > 0 && this.availableNodes[nodeType].length > 0) {
+			var node = this.availableNodes[nodeType].shift();
 			while (node && node.disabled) {
-				node = this.availableNodes.shift();
+				node = this.availableNodes[nodeType].shift();
 			}
 			if (!node) {
 				return;
 			}
-			var callback = this.workQueue.shift();
+			var callback = this.workQueue[nodeType].shift();
 			var doNext = () => {
-				this.availableNodes.push(node);
-				this.processWorkQueue();
+				this.availableNodes[nodeType].push(node);
+				this.processWorkQueue(nodeType);
 			};
 			callback(node).then(doNext).catch(doNext);
 		}
 	}
 
-	getNode(callback) {
-		this.workQueue.push(callback);
-		this.processWorkQueue();
+	getNode(callback, nodeType='ISPC') {
+		this.workQueue[nodeType].push(callback);
+		this.processWorkQueue(nodeType);
 	}
 
-	async build(node, name, source) {
+	async build(node, name, source, language, vulkanDeviceIndex) {
 		if (node.info.canBuild) {
 			return { blob: new Blob([source]), isBinary: false };
 		} else {
@@ -88,7 +89,7 @@ class Cluster {
 		var vmSuffix = '/new' + green + '/' + name;
 		var runJob = (input, jobIdx) => {
 			cluster.getNode(async (node) => {
-				const program = await cluster.build(node, name, source);
+				const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex);
 				if (!program) {
 					cluster.disableNode(node);
 					return runJob(input);
@@ -105,7 +106,7 @@ class Cluster {
 					runJob(input);
 				}
 				return onResponse(res, input, runJob, jobIdx);
-			});
+			}, language === 'glsl' ? 'SPIRV' : 'ISPC');
 		};
 		inputs.forEach(runJob);
 		return cluster;
