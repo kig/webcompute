@@ -17,6 +17,7 @@ function send() {
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
+		language: this.vmlanguage.value,
 		source: window.vmsrcEditor.getValue(),
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),

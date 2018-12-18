@@ -188,6 +188,29 @@ var getCPUFreq = function (nodeInfo) {
     return [];
 }
 
+var getVulkanDevices = function () {
+    try {
+        var infoString = execSync(`vulkaninfo`).toString();
+        var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
+        var uuids = {};
+        var uniqGPUs = [];
+        gpus.forEach((gpu, index) => {
+            var info = JSON.parse(execSync(`vulkaninfo --json=${index}`).toString());
+            var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.join(",");
+            if (!uuids[uuid]) {
+                uuids[uuid] = true;
+                uniqGPUs.push(info);
+            }
+        });
+        uniqGPUs.forEach(gpu => 
+            console.log("Found Vulkan device", gpu.VkPhysicalDeviceProperties.deviceName, gpu.VkPhysicalDeviceProperties.pipelineCacheUUID.join(","))
+        );
+        return uniqGPUs;
+    } catch(e) {
+        return [];
+    }
+}
+
 var nodeInfo = {
     platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : 'macos',
     arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
@@ -198,7 +221,7 @@ nodeInfo.memorySize = getMemorySize(nodeInfo);
 nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
 nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
 nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
-
+nodeInfo.vulkanDevices = getVulkanDevices();
 
 app.get('/info', (req, res) => {
     res.writeHead(200);

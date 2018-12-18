@@ -2,11 +2,12 @@ ISPC=ispc
 FLAGS=
 TARGET=kernel
 BITS=64
-ARCH=x86-64
-PLATFORM=linux
 
-MY_ARCH=x86-64
-MY_PLATFORM=linux
+MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/)
+MY_ARCH := $(shell uname -m | tr _ -)
+
+PLATFORM := $(MY_PLATFORM)
+ARCH := $(MY_ARCH)
 
 RUNNER=objs/runner-$(PLATFORM)-$(ARCH).o
 TASKSYS=objs/tasksys-$(PLATFORM)-$(ARCH).o

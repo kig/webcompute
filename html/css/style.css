@@ -66,7 +66,8 @@ canvas {
 }
 #container {
   width: 100%;
-  height: calc(100vh - 460px);
+  height: calc(100vh - 640px);
+  min-height: 400px;
   border: 1px solid #eee;
   border-radius: 5px;
 }
