@@ -104,7 +104,7 @@ function processResponse(arrayBuffer, output, outputType, outputWidth, outputHei
 window.vmsrcEditor = null;
 require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
-	fetch('examples/mandel.ispc').then(res => res.text()).then(text => {
+	fetch('examples/mandel.comp.glsl').then(res => res.text()).then(text => {
 		window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
 			value: text,
 			language: 'c'

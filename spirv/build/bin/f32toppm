@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+
+const width = parseInt(process.argv[2]);
+const height = parseInt(process.argv[3])
+const src = process.argv[4];
+const dst = process.argv[5];
+
+const f32 = new Float32Array(fs.readFileSync(src).buffer);
+const u8 = new Uint8Array(width * height * 3);
+
+for (var i=0, j=0; i < width * height * 4; i+=4, j+=3) {
+  u8[j+0] = f32[i+0] * 255;
+  u8[j+1] = f32[i+1] * 255;
+  u8[j+2] = f32[i+2] * 255;
+}
+
+fs.writeFileSync(dst, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), u8]));
+
+
