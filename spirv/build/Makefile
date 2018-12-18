@@ -5,7 +5,7 @@ FLAGS=
 TARGET=kernel
 BITS=64
 
-PLATFORM=linux
+PLATFORM=macos
 ARCH=x86-64
 
 MY_PLATFORM=linux
@@ -19,7 +19,11 @@ spirv:
 
 runner:
 	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lm -lstdc++ $(FOMP) $(OMP)
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -lpthread -lm -lstdc++ -std=c++11 $(FOMP) $(OMP)
+
+testinput:
+	mkdir -p bin
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/createTestInput-$(PLATFORM)-$(ARCH) createTestInput.cpp -lm -lstdc++ -std=c++11
 
 ispc-runner:
 	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp
