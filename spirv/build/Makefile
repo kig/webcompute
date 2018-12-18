@@ -8,7 +8,7 @@ BITS=64
 PLATFORM=macos
 ARCH=x86-64
 
-MY_PLATFORM=linux
+MY_PLATFORM=macos
 MY_ARCH=x86-64
 
 default: spirv ispc-cross

@@ -1,31 +1,33 @@
 NEXT STEPS
-- GLSL -> ISPC -> bin -> RUN! locally
-    [X!] BOOM DONE!
-    - runner with stdin-stdout map locally
-        [!x¡] BOOM DONE!
-
+- GLSL backend
+    [] buildSPIRV()
+        [] Compile .glsl to .spv
+    [] runGLSLJob()
+        [] make TARGET=balabala spirv
+        [] make TARGET=balabala ARCH=bla PLATFORM=blo MY_ARCH=foo MY_PLATFORM=bar ispc-cross ispc ispc-bin
+        [] targets/balabala/program <input | res.socket
 
 
 
 TASKS
     [] GLSL Compute Shader runner
         [x] Compile GLSL shader to SPIRV
-        [] Vulkan runner app
+        [x] Vulkan runner app
             [x] Compile makefile
-            [] /build instance
-            [] /new instance
-            [] runner.cpp -like semantics
+            [x] runner.cpp -like semantics
         [x] ISPC runner app
             [x] Compile GLSL shader to ISPC
             [x] Add launch[x,y,z] to spirv-to-ISPC output
             [x] Add runner.cpp -like semantics
+        [] GLSL backend target
+            [] Vulkan device enumeration in node info
+            [] /build instance
+            [] /new instance
         [] Front-end
             [] Send GLSL shader to ISPC and Vulkan targets: 
-                /new {language: 'glsl', target: 'vulkan', device: 0}
-                /new {language: 'glsl', target: 'ispc'}
+                [] /new {language: 'glsl', target: 'vulkan', device: 0}
+                [] /new {language: 'glsl', target: 'ispc'}
                 - That's... it?
-        [] Backend
-            [] Vulkan device enumeration in node info
 
     [] Distribution network
         [] Latency limit to restrict node selection

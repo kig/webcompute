@@ -80,9 +80,13 @@ class ComputeApplication
     uint32_t workSize[3] = {1, 1, 1};
     char *input;
 
+    const char *programFileName;
+
   public:
-    void run()
+    void run(const char *fileName)
     {
+        programFileName = fileName;
+
         readInput();
 
         // Initialize vulkan:
@@ -123,24 +127,27 @@ class ComputeApplication
     void readInput()
     {
         ssize_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
-        
+
         bufferSize = 0;
-        read_bytes = fread(&bufferSize, 4, 1, stdin);
+        read_bytes = fread(&bufferSize, 1, 4, stdin);
         if (read_bytes < 4)
         {
+            fprintf(stderr, "read only %zd bytes, using default bufferSize\n", read_bytes);
             bufferSize = 4;
         }
 
         vulkanDeviceIndex = 0;
-        read_bytes = fread(&vulkanDeviceIndex, 4, 1, stdin);
+        read_bytes = fread(&vulkanDeviceIndex, 1, 4, stdin);
         if (read_bytes < 4)
         {
-            vulkanDeviceIndex = 4;
+            fprintf(stderr, "read only %zd bytes, using default vulkanDeviceIndex\n", read_bytes);
+            vulkanDeviceIndex = 0;
         }
 
-        read_bytes = fread(workSize, 4, 3, stdin);
+        read_bytes = fread(workSize, 1, 12, stdin);
         if (read_bytes < 12)
         {
+            fprintf(stderr, "read only %zd bytes, using default workSize\n", read_bytes);
             workSize[0] = workSize[1] = workSize[2] = 1;
         }
 
@@ -291,8 +298,7 @@ class ComputeApplication
             .applicationVersion = 0,
             .pEngineName = NULL,
             .engineVersion = 0,
-            .apiVersion = VK_API_VERSION_1_0
-        };
+            .apiVersion = VK_API_VERSION_1_0};
 
         VkInstanceCreateInfo createInfo = {
             .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -302,8 +308,7 @@ class ComputeApplication
             .enabledLayerCount = static_cast<uint32_t>(enabledLayers.size()),
             .ppEnabledLayerNames = enabledLayers.data(),
             .enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size()),
-            .ppEnabledExtensionNames = enabledExtensions.data()
-        };
+            .ppEnabledExtensionNames = enabledExtensions.data()};
 
         VK_CHECK_RESULT(vkCreateInstance(&createInfo, NULL, &instance));
 
@@ -341,7 +346,8 @@ class ComputeApplication
 
         VkPhysicalDevice devices[deviceCount];
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
-        physicalDevice = devices[vulkanDeviceIndex];
+        // fprintf(stderr, "%d devices, using index %d\n", deviceCount, vulkanDeviceIndex);
+        physicalDevice = devices[vulkanDeviceIndex % deviceCount];
     }
 
     // Returns the index of a queue family that supports compute operations.
@@ -378,36 +384,25 @@ class ComputeApplication
 
     void createDevice()
     {
-        /*
-        We create the logical device in this function.
-        */
-
-        /*
-        When creating the device, we also specify what queues it has.
-        */
-        VkDeviceQueueCreateInfo queueCreateInfo = {};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
-        queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-        queueCreateInfo.queueCount = 1; // create one queue in this family. We don't need more.
-        float queuePriorities = 1.0;    // we only have one queue, so this is not that imporant.
-        queueCreateInfo.pQueuePriorities = &queuePriorities;
+        float queuePriorities = 1.0;                     // we only have one queue, so this is not that imporant.
 
-        /*
-        Now we create the logical device. The logical device allows us to interact with the physical
-        device.
-        */
-        VkDeviceCreateInfo deviceCreateInfo = {};
+        VkDeviceQueueCreateInfo queueCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = queueFamilyIndex,
+            .queueCount = 1, // create one queue in this family. We don't need more.
+            .pQueuePriorities = &queuePriorities};
 
-        // Specify any desired device features here. We do not need any for this application, though.
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
-        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceCreateInfo.enabledLayerCount = enabledLayers.size(); // need to specify validation layers here as well.
-        deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
-        deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
-        deviceCreateInfo.queueCreateInfoCount = 1;
-        deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+        VkDeviceCreateInfo deviceCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .enabledLayerCount = static_cast<uint32_t>(enabledLayers.size()),
+            .ppEnabledLayerNames = enabledLayers.data(),
+            .pQueueCreateInfos = &queueCreateInfo,
+            .queueCreateInfoCount = 1,
+            .pEnabledFeatures = &deviceFeatures,
+        };
 
         VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
 
@@ -663,7 +658,7 @@ class ComputeApplication
         uint32_t filelength;
         // the code in comp.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t *code = readFile(filelength, "program.spv");
+        uint32_t *code = readFile(filelength, programFileName);
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code;
@@ -828,13 +823,13 @@ class ComputeApplication
     }
 };
 
-int main()
+int main(int argc, char *argv[])
 {
     ComputeApplication app;
 
     try
     {
-        app.run();
+        app.run(argc > 0 ? argv[1] : "program.spv");
     }
     catch (const std::runtime_error &e)
     {
