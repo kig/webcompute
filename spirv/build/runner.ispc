@@ -6,7 +6,7 @@ void runner_tiled(uniform int3 gl_NumWorkGroups, uniform struct inputs& input, u
     uniform int3 gl_WorkGroupID = int3(taskIndex0, taskIndex1, taskIndex2);
 
     // Vectorise the workgroup
-    foreach_tiled(lz = 0 ... gl_WorkGroupSize.z, ly = 0 ... gl_WorkGroupSize.y, lx = 0 ... gl_WorkGroupSize.x)
+    foreach(lz = 0 ... gl_WorkGroupSize.z, ly = 0 ... gl_WorkGroupSize.y, lx = 0 ... gl_WorkGroupSize.x)
     {
         varying int3 gl_LocalInvocationID = int3(lx, ly, lz);
         varying int3 gl_GlobalInvocationID = gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID;

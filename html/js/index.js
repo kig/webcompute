@@ -108,7 +108,7 @@ function processResponse(arrayBuffer, output, outputType, outputWidth, outputHei
 window.vmsrcEditor = null;
 require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
-	fetch('examples/mandel.comp.glsl').then(res => res.text()).then(text => {
+	fetch('examples/ao.comp.glsl').then(res => res.text()).then(text => {
 		var config = {
 			OutputSize: [4],
 			Workgroups: [1,1,1],

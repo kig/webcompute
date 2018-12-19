@@ -342,7 +342,7 @@ const runVM_ = function (name, body, res) {
             i32[4] = programInputObj.workgroups[2];
             var f32 = new Float32Array(programInput, 20);
             f32.set(programInputObj.input);
-        
+
             /*
                 cd spirv/build
                 cp program.comp.glsl $TARGET/program.comp.glsl
@@ -384,14 +384,16 @@ const runVM_ = function (name, body, res) {
                     make TARGET=$TARGET ispc-cross ispc ispc-bin
                     $TARGET/program <input >output
                 */
-                execFileSync('/usr/bin/make', [
-                    `TARGET=${target}`,
-                    `PLATFORM=${BuildTarget.platform}`,
-                    `ARCH=${BuildTarget.arch}`,
-                    `MY_PLATFORM=${BuildTarget.platform}`,
-                    `MY_ARCH=${BuildTarget.arch}`,
-                    `ispc-cross`, `ispc`, `ispc-bin`
-                ], { cwd: './spirv/build' });
+                if (!fs.existsSync(`./spirv/build/targets/${target}/program`)) {
+                    execFileSync('/usr/bin/make', [
+                        `TARGET=${target}`,
+                        `PLATFORM=${BuildTarget.platform}`,
+                        `ARCH=${BuildTarget.arch}`,
+                        `MY_PLATFORM=${BuildTarget.platform}`,
+                        `MY_ARCH=${BuildTarget.arch}`,
+                        `ispc-cross`, `ispc`, `ispc-bin`
+                    ], { cwd: './spirv/build' });
+                }
 
                 ps = execFile(`./targets/${target}/program`, [], {
                     encoding: 'buffer',
