@@ -16,12 +16,16 @@ function send() {
 		canvas.height = outputHeight * outputTilesY;
 		document.getElementById('output').append(canvas);
 	}
+	var source = window.vmsrcEditor.getValue().split("\n")
+		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/).test(line))
+		.join("\n");
+
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
 		language: this.vmlanguage.value,
 		workgroups: workgroups,
-		source: window.vmsrcEditor.getValue(),
+		source: source,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		onResponse: function (res, input, runJob, jobIdx) {
@@ -110,10 +114,10 @@ require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
 	fetch('examples/ao.comp.glsl').then(res => res.text()).then(text => {
 		var config = {
-			OutputSize: [4],
+			OutputSize: [1228800],
 			Workgroups: [1,1,1],
 			Inputs: [640, 480, 4, 0],
-			OutputType: ['uint8gray', '640', '480'],
+			OutputType: ['float32gray', '640', '480'],
 			Animated: ['false'],
 			Tiles: []
 		};
