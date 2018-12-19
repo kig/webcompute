@@ -1,22 +1,22 @@
-// OutputSize 8294400 
-// Workgroups 120 72 1
+// OutputSize 2073600 
+// Workgroups 12 270 1
 // Inputs 1920 1080 4
-// OutputType float32gray 1920 1080
+// OutputType uint8gray 1920 1080
 // Animated false
 // Tiles 1 1
 
 #version 450
 
-layout (local_size_x = 16, local_size_y = 15, local_size_z = 1 ) in;
+layout (local_size_x = 160, local_size_y = 4, local_size_z = 1 ) in;
 
-layout(std430, binding = 0) buffer inputs
+layout(std430, binding = 0) readonly buffer inputs
 {
   float dimensions[];
 };
 
 layout(std430, binding = 1) buffer outputs
 {
-  float imageData[];
+  uint imageData[];
 };
 
 
@@ -226,33 +226,33 @@ void main()
 	  vec2 duv = ((fragCoord.xy+1.0) / iResolution.xy) - uv;
     float fragColor = 0.0;
     seed = int(mod((fragCoord.x+0.5) * (fragCoord.y*iResolution.y+0.5), 65536.0));
+	
+	Ray ray;
+	Intersection it;
+
+	sphere[0].center = vec3(-2.0, 0.0, -3.5);
+	sphere[0].radius = 0.5;
+	sphere[1].center = vec3(-0.5, 0.0, -3.0);
+	sphere[1].radius = 0.5;
+	sphere[2].center = vec3(1.0, 0.0, -2.2);
+	sphere[2].radius = 0.5;
+	plane.p = vec3(0,-0.5, 0);
+	plane.n = vec3(0, 1.0, 0);
 
     float subSamples = dimensions[2];
     for (float y = 0.; y < subSamples; y++) {
         for (float x = 0.; x < subSamples; x++) {
-            vec2 fuv = uv + (duv / subSamples * vec2(x,y));
+            vec2 fuv = (uv + (vec2(x, y) * duv / subSamples)) * 2.0 - 1.0;
+			fuv.x *= dimensions[0] / dimensions[1];
             
-            vec3 dir = normalize(vec3((fuv-0.5)*2.0*vec2(1.0,1.0/aspectRatio),-1.0));
-            Ray ray;
-
             ray.org = vec3(0.0);
-            ray.dir = dir;
+            ray.dir = normalize(vec3(fuv, -1.0));
 
-            Intersection it;
             it.hit = 0;
             it.n = vec3(0,0,0);
             it.p = vec3(0,0,0);
             it.t = 10000.0;
 
-            sphere[0].center = vec3(-2.0, 0.0, -3.5);
-            sphere[0].radius = 0.5;
-            sphere[1].center = vec3(-0.5, 0.0, -3.0);
-            sphere[1].radius = 0.5;
-            sphere[2].center = vec3(1.0, 0.0, -2.2);
-            sphere[2].radius = 0.5;
-            plane.p = vec3(0,-0.5, 0);
-            plane.n = vec3(0, 1.0, 0);
-            
             Intersect(ray,it);
 
             if (it.t < 1e3) {
@@ -260,5 +260,8 @@ void main()
             }
         }
     }
-    imageData[width * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x] = fragColor / (subSamples * subSamples);
+	uint pxoff = uint(width * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x);
+	uint px4off = pxoff / 4;
+	uint byteIdx = pxoff - px4off * 4;
+    atomicOr(imageData[px4off], uint(255.0 * fragColor / (subSamples * subSamples)) << (8 * byteIdx));
 }
