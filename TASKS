@@ -2,15 +2,11 @@ NEXT STEPS
 - GLSL backend
     [] buildSPIRV()
         [] Compile .glsl to .spv
-    [] runGLSLJob()
-        [] make TARGET=balabala spirv
-        [] make TARGET=balabala ARCH=bla PLATFORM=blo MY_ARCH=foo MY_PLATFORM=bar ispc-cross ispc ispc-bin
-        [] targets/balabala/program <input | res.socket
 
 
 
 TASKS
-    [] GLSL Compute Shader runner
+    [x] GLSL Compute Shader runner
         [x] Compile GLSL shader to SPIRV
         [x] Vulkan runner app
             [x] Compile makefile
@@ -19,14 +15,14 @@ TASKS
             [x] Compile GLSL shader to ISPC
             [x] Add launch[x,y,z] to spirv-to-ISPC output
             [x] Add runner.cpp -like semantics
-        [] GLSL backend target
-            [] Vulkan device enumeration in node info
+        [x] GLSL backend target
+            [x] Vulkan device enumeration in node info
             [] /build instance
-            [] /new instance
-        [] Front-end
-            [] Send GLSL shader to ISPC and Vulkan targets: 
-                [] /new {language: 'glsl', target: 'vulkan', device: 0}
-                [] /new {language: 'glsl', target: 'ispc'}
+            [x] /new instance
+        [x] Front-end
+            [x] Send GLSL shader to ISPC and Vulkan targets: 
+                [x] /new {language: 'glsl', target: 'vulkan', device: 0}
+                [x] /new {language: 'glsl', target: 'ispc'}
                 - That's... it?
 
     [] Distribution network
@@ -34,5 +30,19 @@ TASKS
         [] Job distribution network
         [] Reducer network
 
+    [] Render machinery
+        [] Long-running process for running Vulkan jobs
+            [] Start process on receiving first job
+            [] Receive new kernels and inputs via socket
+            [] Keep latest shader pipeline + buffer alloc cached
+        [] Long-running process for running ISPC with different inputs
+            [] Not very important, ISPC startup time is quite minimal
+            [] Keep process up and receive new inputs via socket
 
+    [] Target optimization
+        [] Either figure out
+            - how to make GLSL AOBench perf match ISPC
+            - how to pass separate kernels to different targets
 
+    [] Windows port
+        [] Run on the Dell laptop /w Win10
