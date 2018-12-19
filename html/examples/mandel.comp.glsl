@@ -15,12 +15,12 @@ struct Pixel{
   vec4 value;
 };
 
-layout(std140, binding = 0) buffer inputs
+layout(std430, binding = 0) buffer inputs
 {
   float dimensions[];
 };
 
-layout(std140, binding = 1) buffer outputs
+layout(std430, binding = 1) buffer outputs
 {
   Pixel imageData[];
 };

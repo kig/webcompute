@@ -3,9 +3,9 @@
 const fs = require('fs');
 
 const width = parseInt(process.argv[2]);
-const height = parseInt(process.argv[3])
-const src = process.argv[4];
-const dst = process.argv[5];
+const height = parseInt(process.argv[3]);
+const src = process.argv[4] || '/dev/stdin';
+const dst = process.argv[5] || '/dev/stdout';
 
 const f32 = new Float32Array(fs.readFileSync(src).buffer);
 const u8 = new Uint8Array(width * height * 3);

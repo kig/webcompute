@@ -9,12 +9,12 @@
 
 layout (local_size_x = 16, local_size_y = 15, local_size_z = 1 ) in;
 
-layout(std140, binding = 0) buffer inputs
+layout(std430, binding = 0) buffer inputs
 {
   float dimensions[];
 };
 
-layout(std140, binding = 1) buffer outputs
+layout(std430, binding = 1) buffer outputs
 {
   float imageData[];
 };
