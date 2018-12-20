@@ -201,12 +201,12 @@ var getCPUFreq = function (nodeInfo) {
 var getVulkanDevices = function () {
     try {
         var extras = execSync(`uname -a`).toString().match(/\bAndroid\b/) ? extras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib" : '';
-        var infoString = execSync(`. ~/.bashrc; ${extras} vulkaninfo`).toString();
+        var infoString = execSync(`. ~/.bashrc; ${extras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
         var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execSync(`. ~/.bashrc; ${extras} vulkaninfo --json=${index}`).toString());
+            var info = JSON.parse(execSync(`. ~/.bashrc; ${extras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`).toString());
             var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;
@@ -237,7 +237,7 @@ nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
 nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
 nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
 nodeInfo.canRunISPC = nodeInfo.arch !== 'windows';
-nodeInfo.vulkanDevices = getVulkanDevices();
+nodeInfo.vulkanDevices = getVulkanDevices(nodeInfo);
 
 app.get('/info', (req, res) => {
     res.writeHead(200);
@@ -261,7 +261,8 @@ const getBuildTarget = () => {
         platform = 'macos';
         cpusig = platform + '-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
     } else {
-        throw new Error("Unknown platform");
+        platform = 'windows'
+        // throw new Error("Unknown platform");
     }
     return {
         cpusig: cpusig,
