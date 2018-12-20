@@ -151,6 +151,10 @@ var getTarget = function (nodeInfo) {
             } else {
                 return 'sse2-i32x8';
             }
+        } else if (nodeInfo.platform === 'windows') {
+            return 'avx2-i32x8';
+        } else {
+            return 'avx2-i32x8';
         }
     }
     throw new Error("Unknown architecture");
@@ -161,6 +165,8 @@ var getThreadCount = function (nodeInfo) {
         return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
     } else if (nodeInfo.platform === 'macos') {
         return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
+    } else if (nodeInfo.platform === 'windows') {
+        return 0;
     }
     throw new Error("Unknown platform");
 }
@@ -170,6 +176,8 @@ var getMemorySize = function (nodeInfo) {
         return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
     } else if (nodeInfo.platform === 'macos') {
         return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
+    } else if (nodeInfo.platform === 'windows') {
+        return 0;
     }
     throw new Error("Unknown platform");
 }
@@ -177,25 +185,28 @@ var getMemorySize = function (nodeInfo) {
 var getCPUFreq = function (nodeInfo) {
     if (nodeInfo.platform === 'linux') {
         return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
-    } else {
+    } else if (nodeInfo.platform === 'macos') {
         var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
         var freqs = [];
         for (var i = 0; i < nodeInfo.threadCount; i++) {
             freqs.push(freq);
         }
         return freqs;
+    } else if (nodeInfo.platform === 'windows') {
+        return [];
     }
     return [];
 }
 
 var getVulkanDevices = function () {
     try {
-        var infoString = execSync(`. ~/.bashrc; vulkaninfo`).toString();
+        var extras = execSync(`uname -a`).toString().match(/\bAndroid\b/) ? extras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib" : '';
+        var infoString = execSync(`. ~/.bashrc; ${extras} vulkaninfo`).toString();
         var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execSync(`. ~/.bashrc; vulkaninfo --json=${index}`).toString());
+            var info = JSON.parse(execSync(`. ~/.bashrc; ${extras} vulkaninfo --json=${index}`).toString());
             var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;
@@ -216,7 +227,7 @@ var getVulkanDevices = function () {
 }
 
 var nodeInfo = {
-    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : 'macos',
+    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : (fs.existsSync('/dev') ? 'macos' : 'windows'),
     arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
 };
 nodeInfo.target = getTarget(nodeInfo);
@@ -225,6 +236,7 @@ nodeInfo.memorySize = getMemorySize(nodeInfo);
 nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
 nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
 nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
+nodeInfo.canRunISPC = nodeInfo.arch !== 'windows';
 nodeInfo.vulkanDevices = getVulkanDevices();
 
 app.get('/info', (req, res) => {
