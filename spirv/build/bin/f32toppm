@@ -7,7 +7,7 @@ const height = parseInt(process.argv[3]);
 const src = process.argv[4] || '/dev/stdin';
 const dst = process.argv[5] || '/dev/stdout';
 
-const f32 = new Float32Array(fs.readFileSync(src).buffer);
+const f32 = new Float32Array(fs.readFileSync(src).buffer, 0, width * height * 4);
 const u8 = new Uint8Array(width * height * 3);
 
 for (var i=0, j=0; i < width * height * 4; i+=4, j+=3) {
