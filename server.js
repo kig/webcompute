@@ -371,7 +371,12 @@ const runVM_ = function (name, body, res) {
                     bin/vulkanRunner $TARGET/program.spv <input >output
                 */
 
-                ps = exec(`. ~/.bashrc; bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
+                var extras = "";
+                if (BuildTarget.platform === 'android') {
+                    extras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib";
+                }
+
+                ps = exec(`. ~/.bashrc; ${extras} bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
                     encoding: 'buffer',
                     stdio: ['pipe', 'pipe', 'inherit'],
                     maxBuffer: Infinity,
