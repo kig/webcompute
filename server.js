@@ -330,7 +330,7 @@ const runVM_ = function (name, body, res) {
                     fs.writeFileSync(`./ispc/build/targets/${target}/program`, program);
                 } else if (programInputObj.binary) {
                     fs.writeFileSync(`./ispc/build/targets/${target}/program.o`, program);
-                    execFileSync('/usr/bin/make', [
+                    execFileSync('make', [
                         `TARGET=${target}`,
                         `PLATFORM=${BuildTarget.platform}`,
                         `ARCH=${BuildTarget.arch}`,
@@ -340,7 +340,7 @@ const runVM_ = function (name, body, res) {
                     ], { cwd: './ispc/build' });
                 } else {
                     fs.writeFileSync(`./ispc/build/targets/${target}/program.ispc`, program);
-                    execFileSync('/usr/bin/make', [
+                    execFileSync('make', [
                         `TARGET=${target}`,
                         `PLATFORM=${BuildTarget.platform}`,
                         `ARCH=${BuildTarget.arch}`,
@@ -384,7 +384,7 @@ const runVM_ = function (name, body, res) {
                     execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
                 }
                 fs.writeFileSync(`./spirv/build/targets/${target}/program.comp.glsl`, program);
-                execFileSync('/usr/bin/make', [
+                execFileSync('make', [
                     `TARGET=${target}`,
                     `PLATFORM=${BuildTarget.platform}`,
                     `ARCH=${BuildTarget.arch}`,
@@ -402,7 +402,7 @@ const runVM_ = function (name, body, res) {
                     bin/vulkanRunner $TARGET/program.spv <input >output
                 */
 
-                ps = exec(`${VulkanExtras} bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
+                ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
                     encoding: 'buffer',
                     stdio: ['pipe', 'pipe', 'inherit'],
                     maxBuffer: Infinity,
@@ -416,7 +416,7 @@ const runVM_ = function (name, body, res) {
                     $TARGET/program <input >output
                 */
                 if (!fs.existsSync(`./spirv/build/targets/${target}/program`)) {
-                    execFileSync('/usr/bin/make', [
+                    execFileSync('make', [
                         `TARGET=${target}`,
                         `PLATFORM=${BuildTarget.platform}`,
                         `ARCH=${BuildTarget.arch}`,

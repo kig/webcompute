@@ -3,7 +3,7 @@ FLAGS=
 TARGET=kernel
 BITS=64
 
-MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/)
+MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/ | sed -E s/mingw.*/windows/ )
 MY_ARCH := $(shell uname -m | tr _ -)
 
 PLATFORM := $(MY_PLATFORM)
