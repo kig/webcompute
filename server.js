@@ -105,12 +105,12 @@ var getCPUFreq = function (nodeInfo) {
 
 var getVulkanDevices = function (nodeInfo) {
     try {
-        var infoString = execSync(`${VulkanExtras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
+        var infoString = execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
         var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execSync(`${VulkanExtras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`).toString());
+            var info = JSON.parse(execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`).toString());
             var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;
@@ -144,7 +144,7 @@ var VulkanExtras = '';
 if (nodeInfo.platform === 'macos') {
     VulkanExtras = '. ~/.bashrc; ';
 } else if (nodeInfo.platform === 'linux' && execSync(`uname -a`).toString().match(/\bAndroid\b/)) {
-    VulkanExtras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib";
+    VulkanExtras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib ";
 }
 nodeInfo.target = getTarget(nodeInfo);
 nodeInfo.threadCount = getThreadCount(nodeInfo);
