@@ -26,6 +26,167 @@ app.use('/', express.static('html'));
 
 
 
+// Platform detection
+
+
+var getTarget = function (nodeInfo) {
+    if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'armv7l') {
+        return 'neon-i32x4';
+    }
+    if (nodeInfo.arch === 'x86-64') {
+        if (nodeInfo.platform === 'linux') {
+            var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
+            if (keys.indexOf('avx2') > -1) {
+                return 'avx2-i32x8';
+            } else if (keys.indexOf('avx') > -1) {
+                return 'avx1-i32x8';
+            } else if (keys.indexOf('sse4_1') > -1 || keys.indexOf('sse4a') > -1) {
+                return 'sse4-i32x8';
+            } else {
+                return 'sse2-i32x8';
+            }
+        } else if (nodeInfo.platform === 'macos') {
+            var keys = execSync(`sysctl -a | grep machdep.cpu | grep -o -E ' MMX\\S* | SSE\\S* | AVX\\S* '`).toString().toLowerCase().replace(/^\s+|\s+$/g, '').split(/\s+/);
+            if (keys.indexOf('avx2') > -1) {
+                return 'avx2-i32x8';
+            } else if (keys.indexOf('avx1.0') > -1) {
+                return 'avx1-i32x8';
+            } else if (keys.indexOf('sse4.1') > -1) {
+                return 'sse4-i32x8';
+            } else {
+                return 'sse2-i32x8';
+            }
+        } else if (nodeInfo.platform === 'windows') {
+            return 'avx2-i32x8';
+        } else {
+            return 'avx2-i32x8';
+        }
+    }
+    throw new Error("Unknown architecture");
+}
+
+var getThreadCount = function (nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+        return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
+    } else if (nodeInfo.platform === 'macos') {
+        return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
+    } else if (nodeInfo.platform === 'windows') {
+        return 0;
+    }
+    throw new Error("Unknown platform");
+}
+
+var getMemorySize = function (nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+        return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
+    } else if (nodeInfo.platform === 'macos') {
+        return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
+    } else if (nodeInfo.platform === 'windows') {
+        return 0;
+    }
+    throw new Error("Unknown platform");
+}
+
+var getCPUFreq = function (nodeInfo) {
+    if (nodeInfo.platform === 'linux') {
+        return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
+    } else if (nodeInfo.platform === 'macos') {
+        var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
+        var freqs = [];
+        for (var i = 0; i < nodeInfo.threadCount; i++) {
+            freqs.push(freq);
+        }
+        return freqs;
+    } else if (nodeInfo.platform === 'windows') {
+        return [];
+    }
+    return [];
+}
+
+var getVulkanDevices = function (nodeInfo) {
+    try {
+        var infoString = execSync(`${VulkanExtras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
+        var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
+        var uuids = {};
+        var uniqGPUs = [];
+        gpus.forEach((gpu, index) => {
+            var info = JSON.parse(execSync(`${VulkanExtras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`).toString());
+            var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
+            if (!uuids[uuid]) {
+                uuids[uuid] = true;
+                uniqGPUs.push(info);
+            }
+        });
+        uniqGPUs.forEach(gpu =>
+            console.log(
+                "Found Vulkan device",
+                gpu.VkPhysicalDeviceProperties.deviceName,
+                gpu.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("")
+            )
+        );
+        return uniqGPUs;
+    } catch (e) {
+        return [];
+    }
+}
+
+var nodeInfo = {
+    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : (fs.existsSync('/dev') ? 'macos' : 'windows'),
+    arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
+};
+var VulkanExtras = '';
+if (nodeInfo.platform === 'macos') {
+    VulkanExtras = '. ~/.bashrc; ';
+} else if (nodeInfo.platform === 'linux' && execSync(`uname -a`).toString().match(/\bAndroid\b/)) {
+    VulkanExtras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib";
+}
+nodeInfo.target = getTarget(nodeInfo);
+nodeInfo.threadCount = getThreadCount(nodeInfo);
+nodeInfo.memorySize = getMemorySize(nodeInfo);
+nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
+nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
+nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
+nodeInfo.canRunISPC = nodeInfo.arch !== 'windows';
+nodeInfo.vulkanDevices = getVulkanDevices(nodeInfo);
+
+app.get('/info', (req, res) => {
+    res.writeHead(200);
+    res.end(JSON.stringify(nodeInfo));
+});
+
+
+const getBuildTarget = () => {
+    var cpusig;
+    var platform = 'linux';
+    var arch = execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-');
+    if (/^arm/.test(arch)) {
+        arch = 'arm';
+    }
+    if (fs.existsSync('/proc/cpuinfo')) {
+        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+            platform = 'android';
+        }
+        cpusig = platform + '-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
+    } else if (fs.existsSync('/Library/ColorSync')) {
+        platform = 'macos';
+        cpusig = platform + '-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
+    } else {
+        platform = 'windows'
+        cpusig = platform + '-x86-64-avx2-i32x8';
+        // throw new Error("Unknown platform");
+    }
+    return {
+        cpusig: cpusig,
+        platform: platform,
+        arch: arch
+    };
+};
+
+const BuildTarget = getBuildTarget();
+
+
+
+
 // Main app
 
 
@@ -123,155 +284,6 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
         res.end("------ Total Elapsed: " + (t1 - startTime) + " ms\n")
     }
 });
-
-var getTarget = function (nodeInfo) {
-    if (nodeInfo.arch === 'aarch64' || nodeInfo.arch === 'armv7l') {
-        return 'neon-i32x4';
-    }
-    if (nodeInfo.arch === 'x86-64') {
-        if (nodeInfo.platform === 'linux') {
-            var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
-            if (keys.indexOf('avx2') > -1) {
-                return 'avx2-i32x8';
-            } else if (keys.indexOf('avx') > -1) {
-                return 'avx1-i32x8';
-            } else if (keys.indexOf('sse4_1') > -1 || keys.indexOf('sse4a') > -1) {
-                return 'sse4-i32x8';
-            } else {
-                return 'sse2-i32x8';
-            }
-        } else if (nodeInfo.platform === 'macos') {
-            var keys = execSync(`sysctl -a | grep machdep.cpu | grep -o -E ' MMX\\S* | SSE\\S* | AVX\\S* '`).toString().toLowerCase().replace(/^\s+|\s+$/g, '').split(/\s+/);
-            if (keys.indexOf('avx2') > -1) {
-                return 'avx2-i32x8';
-            } else if (keys.indexOf('avx1.0') > -1) {
-                return 'avx1-i32x8';
-            } else if (keys.indexOf('sse4.1') > -1) {
-                return 'sse4-i32x8';
-            } else {
-                return 'sse2-i32x8';
-            }
-        } else if (nodeInfo.platform === 'windows') {
-            return 'avx2-i32x8';
-        } else {
-            return 'avx2-i32x8';
-        }
-    }
-    throw new Error("Unknown architecture");
-}
-
-var getThreadCount = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
-        return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
-    } else if (nodeInfo.platform === 'macos') {
-        return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
-    } else if (nodeInfo.platform === 'windows') {
-        return 0;
-    }
-    throw new Error("Unknown platform");
-}
-
-var getMemorySize = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
-        return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
-    } else if (nodeInfo.platform === 'macos') {
-        return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
-    } else if (nodeInfo.platform === 'windows') {
-        return 0;
-    }
-    throw new Error("Unknown platform");
-}
-
-var getCPUFreq = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
-        return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
-    } else if (nodeInfo.platform === 'macos') {
-        var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
-        var freqs = [];
-        for (var i = 0; i < nodeInfo.threadCount; i++) {
-            freqs.push(freq);
-        }
-        return freqs;
-    } else if (nodeInfo.platform === 'windows') {
-        return [];
-    }
-    return [];
-}
-
-var getVulkanDevices = function () {
-    try {
-        var extras = execSync(`uname -a`).toString().match(/\bAndroid\b/) ? extras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib" : '';
-        var infoString = execSync(`. ~/.bashrc; ${extras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
-        var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
-        var uuids = {};
-        var uniqGPUs = [];
-        gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execSync(`. ~/.bashrc; ${extras} ./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`).toString());
-            var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
-            if (!uuids[uuid]) {
-                uuids[uuid] = true;
-                uniqGPUs.push(info);
-            }
-        });
-        uniqGPUs.forEach(gpu =>
-            console.log(
-                "Found Vulkan device",
-                gpu.VkPhysicalDeviceProperties.deviceName,
-                gpu.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("")
-            )
-        );
-        return uniqGPUs;
-    } catch (e) {
-        return [];
-    }
-}
-
-var nodeInfo = {
-    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : (fs.existsSync('/dev') ? 'macos' : 'windows'),
-    arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
-};
-nodeInfo.target = getTarget(nodeInfo);
-nodeInfo.threadCount = getThreadCount(nodeInfo);
-nodeInfo.memorySize = getMemorySize(nodeInfo);
-nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
-nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
-nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
-nodeInfo.canRunISPC = nodeInfo.arch !== 'windows';
-nodeInfo.vulkanDevices = getVulkanDevices(nodeInfo);
-
-app.get('/info', (req, res) => {
-    res.writeHead(200);
-    res.end(JSON.stringify(nodeInfo));
-});
-
-
-const getBuildTarget = () => {
-    var cpusig;
-    var platform = 'linux';
-    var arch = execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-');
-    if (/^arm/.test(arch)) {
-        arch = 'arm';
-    }
-    if (fs.existsSync('/proc/cpuinfo')) {
-        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
-            platform = 'android';
-        }
-        cpusig = platform + '-' + execSync("grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u | md5sum").toString().split(" ")[0];
-    } else if (fs.existsSync('/Library/ColorSync')) {
-        platform = 'macos';
-        cpusig = platform + '-' + execSync(`sysctl -a | grep machdep.cpu | grep features | sed 's/.*: //' | tr '[:upper:]' '[:lower:]' | tr ' ' "\n" | sort | uniq | grep -E 'avx|sse|mmx' | md5`).toString().replace(/\s/g, '');
-    } else {
-        platform = 'windows'
-        // throw new Error("Unknown platform");
-    }
-    return {
-        cpusig: cpusig,
-        platform: platform,
-        arch: arch
-    };
-};
-
-const BuildTarget = getBuildTarget();
 
 const runVM_ = function (name, body, res) {
     function sendResult(result) {
@@ -384,12 +396,7 @@ const runVM_ = function (name, body, res) {
                     bin/vulkanRunner $TARGET/program.spv <input >output
                 */
 
-                var extras = "";
-                if (BuildTarget.platform === 'android') {
-                    extras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib";
-                }
-
-                ps = exec(`. ~/.bashrc; ${extras} bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
+                ps = exec(`${VulkanExtras} bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
                     encoding: 'buffer',
                     stdio: ['pipe', 'pipe', 'inherit'],
                     maxBuffer: Infinity,
