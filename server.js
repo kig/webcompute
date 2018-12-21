@@ -314,6 +314,8 @@ const runVM_ = function (name, body, res) {
 
         var ps;
 
+        const exe = BuildTarget.platform === 'windows' ? '.exe' : '';
+
         if (programInputObj.language === 'ispc') {
 
             var programInput = new ArrayBuffer(programInputObj.input.length * 4 + 4);
@@ -321,8 +323,6 @@ const runVM_ = function (name, body, res) {
             i32[0] = programInputObj.outputLength;
             var f32 = new Float32Array(programInput, 4);
             f32.set(programInputObj.input);
-
-            const exe = BuildTarget.platform === 'windows' ? '.exe' : '';
 
             if (!fs.existsSync(`./ispc/build/targets/${target}/program${exe}`)) {
                 if (!fs.existsSync(`./ispc/build/targets/${target}`)) {
@@ -417,7 +417,7 @@ const runVM_ = function (name, body, res) {
                     make TARGET=$TARGET ispc-cross ispc ispc-bin
                     $TARGET/program <input >output
                 */
-                if (!fs.existsSync(`./spirv/build/targets/${target}/program`)) {
+                if (!fs.existsSync(`./spirv/build/targets/${target}/program${exe}`)) {
                     execFileSync('make', [
                         `TARGET=${target}`,
                         `PLATFORM=${BuildTarget.platform}`,

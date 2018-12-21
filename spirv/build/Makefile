@@ -39,7 +39,16 @@ ispc:
 	cp spirvcross_stdlib.ispc targets/$(TARGET)/spirvcross_stdlib.ispc
 	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) --arch=$(ARCH) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
 
+ifeq ($(PLATFORM),windows)
+ispc-bin:
+	mkdir -p targets/$(TARGET)/windows
+	cp windows/* targets/$(TARGET)/windows/
+	cp targets/$(TARGET)/program.o targets/$(TARGET)/windows/program.obj
+	(cd targets/$(TARGET)/windows; "/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"; mv x64/Release/ispcRunner.exe ../program.exe)
+
+else
 ispc-bin:
 	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11
+endif
 
 all: runner ispc-runner spirv ispc-cross ispc ispc-bin

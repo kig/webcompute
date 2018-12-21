@@ -30,14 +30,14 @@ namespace ispc { /* namespace */
 #ifndef __ISPC_STRUCT_inputs__
 #define __ISPC_STRUCT_inputs__
 struct inputs {
-    float inputData[];
+    float inputData[1];
 };
 #endif
 
 #ifndef __ISPC_STRUCT_outputs__
 #define __ISPC_STRUCT_outputs__
 struct outputs {
-    float outputData[];
+    float outputData[1];
 };
 #endif
 

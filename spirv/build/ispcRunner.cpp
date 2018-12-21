@@ -8,7 +8,7 @@
 #endif
 
 static uint32_t bufferSize = 0;
-static uint32_t inputBufferSize = 0;
+static ::size_t inputBufferSize = 0;
 static uint32_t vulkanDeviceIndex = 0;
 static int32_t workSize[3] = {1, 1, 1};
 
@@ -47,8 +47,8 @@ void readInput()
         workSize[0] = workSize[1] = workSize[2] = 1;
     }
 
-    input = (char *)malloc(sizeof(ispc::inputs) + input_buffer_size);
-    input_length = sizeof(ispc::inputs);
+    input = (char *)malloc(sizeof(ispc::inputs) - 4 + input_buffer_size);
+    input_length = sizeof(ispc::inputs) - 4;
     do
     {
         read_bytes = fread((void *)(input + input_length), 1, 4096, stdin);
@@ -66,10 +66,10 @@ void readInput()
 int main(int argc, char *argv[])
 {
     readInput();
-    fprintf(stderr, "%d %d %d %d %d %d\n", bufferSize, vulkanDeviceIndex, workSize[0], workSize[1], workSize[2], inputBufferSize);
+    // fprintf(stderr, "%d %d %d %d %d %d\n", bufferSize, vulkanDeviceIndex, workSize[0], workSize[1], workSize[2], inputBufferSize);
 
     ispc::inputs *inputs = (ispc::inputs *)input;
-    ispc::outputs *outputs = (ispc::outputs *)malloc(sizeof(ispc::outputs) + bufferSize);
+    ispc::outputs *outputs = (ispc::outputs *)malloc(sizeof(ispc::outputs) - 4 + bufferSize);
 
     ispc::runner_main(workSize, *inputs, *outputs);
     fwrite(outputs->outputData, 1, bufferSize, stdout);
