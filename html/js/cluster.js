@@ -39,7 +39,7 @@ class Cluster {
 	}
 
 	async build(node, name, source, language, vulkanDeviceIndex) {
-		if (node.info.canBuild) {
+		if (node.info.canBuild || (vulkanDeviceIndex != null && language === 'glsl')) {
 			return { blob: new Blob([source]), isBinary: false };
 		} else {
 			const vmSuffix = '/build/' + name;
