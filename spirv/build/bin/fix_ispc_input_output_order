@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+STDIN.read.sub(
+	/program_ispc_main\(varying int3 gl_GlobalInvocationID,\s*uniform struct outputs&\s+([^,]+),\s*uniform struct inputs&\s+([^\)]+)/
+) {|m| 
+	"program_ispc_main(varying int3 gl_GlobalInvocationID, uniform struct inputs& #{$2}, uniform struct outputs\& #{$1}" 
+}.split(/^export void /)[0].display

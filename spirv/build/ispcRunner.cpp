@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include "program.h"
 
+#ifdef WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 static uint32_t bufferSize = 0;
 static uint32_t inputBufferSize = 0;
 static uint32_t vulkanDeviceIndex = 0;
@@ -11,7 +16,13 @@ static char *input;
 
 void readInput()
 {
-    ssize_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
+    ::size_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
+
+#ifdef WIN32
+	_setmode(_fileno(stdout), _O_BINARY);
+	_setmode(_fileno(stdin), _O_BINARY);
+#endif
+
 
     bufferSize = 0;
     read_bytes = fread(&bufferSize, 1, 4, stdin);
@@ -55,6 +66,7 @@ void readInput()
 int main(int argc, char *argv[])
 {
     readInput();
+    fprintf(stderr, "%d %d %d %d %d %d\n", bufferSize, vulkanDeviceIndex, workSize[0], workSize[1], workSize[2], inputBufferSize);
 
     ispc::inputs *inputs = (ispc::inputs *)input;
     ispc::outputs *outputs = (ispc::outputs *)malloc(sizeof(ispc::outputs) + bufferSize);

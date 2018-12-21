@@ -11,6 +11,12 @@ MY_ARCH := $(shell uname -m | tr _ -)
 PLATFORM := $(MY_PLATFORM)
 ARCH := $(MY_ARCH)
 
+LIBS=-lm -lpthread -lstdc++
+
+ifeq ($(PLATFORM),windows)
+  LIBS=
+endif
+
 default: spirv ispc-cross ispc ispc-bin
 
 spirv:
@@ -26,14 +32,14 @@ ispc-runner:
 
 ispc-cross:
 	../$(SPIRV_CROSS_ISPC)-$(MY_PLATFORM)-$(MY_ARCH) --ispc targets/$(TARGET)/program.spv --output targets/$(TARGET)/program.ispc-raw
-	ruby -e 'STDIN.read.sub(/program_ispc_main\(varying int3 gl_GlobalInvocationID,\s*uniform struct outputs&\s+([^,]+),\s*uniform struct inputs&\s+([^\)]+)/, "program_ispc_main\(varying int3 gl_GlobalInvocationID, uniform struct inputs\& \\2, uniform struct outputs\& \\1").split(/^export void /)[0].display' <targets/$(TARGET)/program.ispc-raw >targets/$(TARGET)/program.ispc
+	ruby bin/fix_ispc_input_output_order <targets/$(TARGET)/program.ispc-raw >targets/$(TARGET)/program.ispc
 
 ispc:
 	cp runner.ispc targets/$(TARGET)/runner.ispc
 	cp spirvcross_stdlib.ispc targets/$(TARGET)/spirvcross_stdlib.ispc
-	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
+	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) --arch=$(ARCH) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
 
 ispc-bin:
-	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program -lm -lstdc++ -lpthread -std=c++11
+	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11
 
 all: runner ispc-runner spirv ispc-cross ispc ispc-bin

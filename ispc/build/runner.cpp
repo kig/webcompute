@@ -5,6 +5,11 @@
 #include <string.h>
 #include "runner_ispc.h"
 
+#ifdef WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 using namespace ispc;
 
 int main(int argc, char *argv[]) {
@@ -13,7 +18,12 @@ int main(int argc, char *argv[]) {
       Pass memory buffer to main_ispc as void*.
       Get output buffer as void*.
     */
-    ssize_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
+    ::size_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
+
+#ifdef WIN32
+	_setmode(_fileno(stdout), _O_BINARY);
+	_setmode(_fileno(stdin), _O_BINARY);
+#endif
 
     int output_size = 0;
     read_bytes = fread(&output_size, 1, 4, stdin);
