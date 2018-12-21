@@ -131,9 +131,15 @@ var getVulkanDevices = function (nodeInfo) {
 }
 
 var nodeInfo = {
-    platform: fs.existsSync('/proc/cpuinfo') ? 'linux' : (fs.existsSync('/dev') ? 'macos' : 'windows'),
+    platform: execSync('uname').toString().toLowerCase().replace(/\s/g, ''),
     arch: execSync('uname -m').toString().replace(/\s/g, '').replace('_', '-')
 };
+if (/darwin/.test(nodeInfo.platform)) {
+    nodeInfo.platform = 'macos';
+} else if (/mingw/.test(nodeInfo.platform)) {
+    nodeInfo.platform = 'windows';
+}
+console.log(nodeInfo.platform);
 var VulkanExtras = '';
 if (nodeInfo.platform === 'macos') {
     VulkanExtras = '. ~/.bashrc; ';
