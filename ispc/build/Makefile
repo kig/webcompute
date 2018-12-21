@@ -6,6 +6,8 @@ BITS=64
 MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/ | sed -E s/mingw.*/windows/ )
 MY_ARCH := $(shell uname -m | tr _ -)
 
+CXX=clang++
+
 PLATFORM := $(MY_PLATFORM)
 ARCH := $(MY_ARCH)
 
@@ -29,18 +31,39 @@ ifeq ($(ARCH),arm)
 	BITS=32
 endif
 
+ifeq ($(PLATFORM),windows)
+
+link:
+	mkdir -p targets/$(TARGET)/windows
+	cp windows/* targets/$(TARGET)/windows/
+	cp targets/$(TARGET)/program.o targets/$(TARGET)/windows/program.obj
+	(cd targets/$(TARGET)/windows; "/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"; mv x64/Release/runner.exe ../program.exe)
+
+runner:
+	cd windows
+	"/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"
+
+tasksys:
+	cd windows
+	"/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"
+
+else
+
+link:
+	$(CXX) -Iobjs/ -O2 -m$(BITS) -o targets/$(TARGET)/program $(RUNNER) $(TASKSYS) targets/$(TARGET)/program.o -lm -lpthread -lstdc++ $(OMP)
+
+runner:
+	$(CXX) runner.cpp -Iobjs/ -O2 -m$(BITS) -c -o $(RUNNER)
+
+tasksys:
+	$(CXX) tasksys.cpp -Iobjs/ -O2 -m$(BITS) -c -o $(TASKSYS) $(FOMP)
+
+endif
+
 default: ispc link
 
 ispc:
 	../$(ISPC)-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/program.ispc -o targets/$(TARGET)/program.o
 
-link:
-	clang++ -Iobjs/ -O2 -m$(BITS) -o targets/$(TARGET)/program $(RUNNER) $(TASKSYS) targets/$(TARGET)/program.o -lm -lpthread -lstdc++ $(OMP)
-
-runner:
-	clang++ runner.cpp -Iobjs/ -O2 -m$(BITS) -c -o $(RUNNER)
-
-tasksys:
-	clang++ tasksys.cpp -Iobjs/ -O2 -m$(BITS) -c -o $(TASKSYS) $(FOMP)
 
 all: tasksys runner ispc link

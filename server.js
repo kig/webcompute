@@ -322,12 +322,14 @@ const runVM_ = function (name, body, res) {
             var f32 = new Float32Array(programInput, 4);
             f32.set(programInputObj.input);
 
-            if (!fs.existsSync(`./ispc/build/targets/${target}/program`)) {
+            const exe = BuildTarget.platform === 'windows' ? '.exe' : '';
+
+            if (!fs.existsSync(`./ispc/build/targets/${target}/program${exe}`)) {
                 if (!fs.existsSync(`./ispc/build/targets/${target}`)) {
                     execFileSync('mkdir', ['-p', `./ispc/build/targets/${target}`]);
                 }
                 if (programInputObj.executable) {
-                    fs.writeFileSync(`./ispc/build/targets/${target}/program`, program);
+                    fs.writeFileSync(`./ispc/build/targets/${target}/program${exe}`, program);
                 } else if (programInputObj.binary) {
                     fs.writeFileSync(`./ispc/build/targets/${target}/program.o`, program);
                     execFileSync('make', [
