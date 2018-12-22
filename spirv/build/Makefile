@@ -17,6 +17,23 @@ ifeq ($(PLATFORM),windows)
   LIBS=
 endif
 
+FOMP=
+OMP=
+
+ifeq ($(ARCH),aarch64)
+	ifeq ($(PLATFORM),android)
+		# Android Termux, use OpenMP since pthreads semaphores are missing
+		FOMP=-fopenmp
+		OMP=-lomp $(FOMP)
+	endif
+endif
+
+ifeq ($(ARCH),arm)
+	# Raspberry Pi settings
+	OMP=-stdlib=libc++ -lunwind -mfloat-abi=hard
+	BITS=32
+endif
+
 default: spirv ispc-cross ispc ispc-bin
 
 spirv:
@@ -37,7 +54,7 @@ ispc-cross:
 ispc:
 	cp runner.ispc targets/$(TARGET)/runner.ispc
 	cp spirvcross_stdlib.ispc targets/$(TARGET)/spirvcross_stdlib.ispc
-	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) --arch=$(ARCH) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
+	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
 
 ifeq ($(PLATFORM),windows)
 ispc-bin:
@@ -48,7 +65,7 @@ ispc-bin:
 
 else
 ispc-bin:
-	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11
+	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11 $(OMP)
 endif
 
 all: runner ispc-runner spirv ispc-cross ispc ispc-bin
