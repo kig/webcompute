@@ -25,47 +25,122 @@ try {
     
     const startTime = info.time;
     
-    var target = args.platform + "-" + args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
+    var target = (args.language || 'ispc') + "-" + args.platform + "-" + args.arch + "-" + args.target + "/" + crypto.createHash('sha256').update(program).digest('hex');
 
-    process.chdir('./ispc/build');
+    var output;
 
-    if (!fs.existsSync(`./targets/${target}/program.o`)) {
-        var myPlatform = 'linux';
-        var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
-        if (/^arm/.test(myArch)) {
-            myArch = 'arm';
-        }
-        if (fs.existsSync('/proc/cpuinfo')) {
-            if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
-                myPlatform = 'android';
+    if (args.language === 'ispc') {
+
+        process.chdir('./ispc/build');
+
+        if (!fs.existsSync(`./targets/${target}/program.o`)) {
+            var myPlatform = 'linux';
+            var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+            if (/^arm/.test(myArch)) {
+                myArch = 'arm';
             }
-        } else if (fs.existsSync('/Library/ColorSync')) {
-            myPlatform = 'macos';
-        } else {
-            throw new Error("Unknown platform");
+            if (fs.existsSync('/proc/cpuinfo')) {
+                if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+                    myPlatform = 'android';
+                }
+            } else if (fs.existsSync('/Library/ColorSync')) {
+                myPlatform = 'macos';
+            } else {
+                throw new Error("Unknown platform");
+            }
+
+            if (!fs.existsSync(`./targets/${target}`)) {
+                execFileSync('mkdir', ['-p', `./targets/${target}`]);
+            }
+            const arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
+            const bits = arch === 'arm' ? '32' : '64';
+            const ispc = 'ispc';
+            fs.writeFileSync(`./targets/${target}/program.ispc`, program);
+            execFileSync('/usr/bin/make', [
+                'ispc',
+                `ISPC=${ispc}`, 
+                `BITS=${bits}`,
+                `PLATFORM=${args.platform}`,
+                `MY_PLATFORM=${myPlatform}`,
+                `MY_ARCH=${myArch}`,
+                `ARCH=${arch}`,
+                `FLAGS=--arch=${arch} --target=${args.target} --addressing=${args.addressing}`,
+                `TARGET=${target}`
+            ]);
+        }
+        output = fs.readFileSync(`./targets/${target}/program.o`);
+
+    } else if (args.language === 'glsl') {
+        /*
+            cd spirv/build
+            cp program.comp.glsl $TARGET/program.comp.glsl
+            make TARGET=$TARGET spirv
+        */
+        if (!fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
+            var myPlatform = 'linux';
+            var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+            if (/^arm/.test(myArch)) {
+                myArch = 'arm';
+            }
+            if (fs.existsSync('/proc/cpuinfo')) {
+                if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+                    myPlatform = 'android';
+                }
+            } else if (fs.existsSync('/Library/ColorSync')) {
+                myPlatform = 'macos';
+            } else {
+                throw new Error("Unknown platform");
+            }
+
+            if (!fs.existsSync(`./targets/${target}`)) {
+                execFileSync('mkdir', ['-p', `./targets/${target}`]);
+            }
+            var arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
+            var bits = arch === 'arm' ? '32' : '64';
+
+            if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
+                execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
+            }
+            fs.writeFileSync(`./spirv/build/targets/${target}/program.comp.glsl`, program);
+            execFileSync('make', [
+                `TARGET=${target}`,
+                `PLATFORM=${args.platform}`,
+                `MY_PLATFORM=${myPlatform}`,
+                `MY_ARCH=${myArch}`,
+                `ARCH=${arch}`,
+                `spirv`
+            ], { cwd: './spirv/build' });
         }
 
-        if (!fs.existsSync(`./targets/${target}`)) {
-            execFileSync('mkdir', ['-p', `./targets/${target}`]);
+        if (info.vulkanDeviceIndex !== undefined) {
+
+            output = fs.readFileSync(`./spirv/build/targets/${target}/program.spv`);
+
+        } else {
+            /*
+                Run on CPU
+                make TARGET=$TARGET ispc-cross ispc ispc-bin
+                $TARGET/program <input >output
+            */
+            if (!fs.existsSync(`./spirv/build/targets/${target}/program.o`)) {
+                execFileSync('make', [
+                    `TARGET=${target}`,
+                    `PLATFORM=${args.platform}`,
+                    `MY_PLATFORM=${myPlatform}`,
+                    `MY_ARCH=${myArch}`,
+                    `ARCH=${arch}`,
+                    `BITS=${bits}`,
+                    `FLAGS=--arch=${arch} --target=${args.target} --addressing=${args.addressing}`,
+                    `ispc-cross`, `ispc`
+                ], { cwd: './spirv/build' });
+            }
+
+            output = fs.readFileSync(`./spirv/build/targets/${target}/program.o`);
+
         }
-        const arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
-        const bits = arch === 'arm' ? '32' : '64';
-        const ispc = 'ispc';
-        fs.writeFileSync(`./targets/${target}/program.ispc`, program);
-        execFileSync('/usr/bin/make', [
-            'ispc',
-            `ISPC=${ispc}`, 
-            `BITS=${bits}`,
-            `PLATFORM=${args.platform}`,
-            `MY_PLATFORM=${myPlatform}`,
-            `MY_ARCH=${myArch}`,
-            `ARCH=${arch}`,
-            `FLAGS=--arch=${arch} --target=${args.target} --addressing=${args.addressing}`,
-            `TARGET=${target}`
-        ]);
+       
     }
 
-    const output = fs.readFileSync(`./targets/${target}/program.o`);
 
     var t1 = Date.now();
 

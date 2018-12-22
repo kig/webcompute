@@ -8,14 +8,14 @@ class Cluster {
 		this.availableNodes.SPIRV = [];
 		nodes.forEach(n => {
 			(n.info.vulkanDevices || []).forEach((vd, idx) => {
-				this.availableNodes.SPIRV.push({...n, vulkanDeviceIndex: idx});
+				this.availableNodes.SPIRV.push({ ...n, vulkanDeviceIndex: idx });
 			});
 			this.availableNodes.SPIRV.push(n);
 		});
-		this.workQueue = {ISPC: [], SPIRV: []};
+		this.workQueue = { ISPC: [], SPIRV: [] };
 	}
 
-	processWorkQueue(nodeType='ISPC') {
+	processWorkQueue(nodeType = 'ISPC') {
 		if (this.workQueue[nodeType].length > 0 && this.availableNodes[nodeType].length > 0) {
 			var node = this.availableNodes[nodeType].shift();
 			while (node && node.disabled) {
@@ -33,7 +33,7 @@ class Cluster {
 		}
 	}
 
-	getNode(callback, nodeType='ISPC') {
+	getNode(callback, nodeType = 'ISPC') {
 		this.workQueue[nodeType].push(callback);
 		this.processWorkQueue(nodeType);
 	}
@@ -43,8 +43,15 @@ class Cluster {
 			return { blob: new Blob([source]), isBinary: false };
 		} else {
 			const vmSuffix = '/build/' + name;
-			const args = { platform: node.info.platform, arch: node.info.arch, target: node.info.target, addressing: 32 };
-			var key = await sha256(JSON.stringify({...args, source: source}));
+			const args = {
+				platform: node.info.platform,
+				language: language,
+				vulkanDeviceIndex: vulkanDeviceIndex,
+				arch: node.info.arch,
+				target: node.info.target,
+				addressing: 32
+			};
+			var key = await sha256(JSON.stringify({ ...args, source: source }));
 			if (!Cluster.buildCache[key]) {
 				Cluster.buildCache[key] = new Promise(async (resolve, reject) => {
 					const buildNode = this.buildNodes.find(bn => {
@@ -57,7 +64,7 @@ class Cluster {
 						resolve(false);
 					}
 					const bin = JSON.stringify(source);
-					const body = new Blob([ JSON.stringify(args), '\n', bin ]);
+					const body = new Blob([JSON.stringify(args), '\n', bin]);
 					const url = buildNode.url + vmSuffix;
 					const res = await fetch(url, { method: 'POST', body });
 					const blob = await Cluster.responseToBlob(res);
@@ -96,12 +103,12 @@ class Cluster {
 				}
 				const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
 				const bin = program.blob;
-				const body = new Blob([ JSON.stringify(args), '\n', bin ]);
+				const body = new Blob([JSON.stringify(args), '\n', bin]);
 				const url = node.url + vmSuffix;
 				var res;
 				try {
 					res = await fetch(url, { method: 'POST', body });
-				} catch(e) {
+				} catch (e) {
 					cluster.disableNode(node);
 					runJob(input);
 				}

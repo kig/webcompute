@@ -105,12 +105,18 @@ var getCPUFreq = function (nodeInfo) {
 
 var getVulkanDevices = function (nodeInfo) {
     try {
-        var infoString = execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`).toString();
+        var infoString = (nodeInfo.platform === 'windows'
+            ? execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`)
+            : execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`)
+        ).toString();
         var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
-            var info = JSON.parse(execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`, [`--json=${index}`]).toString());
+            var info = JSON.parse((nodeInfo.platform === 'windows'
+                ? execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`, [`--json=${index}`])
+                : execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`)
+            ).toString());
             var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;
@@ -381,7 +387,7 @@ const runVM_ = function (name, body, res) {
                 cp program.comp.glsl $TARGET/program.comp.glsl
                 make TARGET=$TARGET spirv
             */
-            if (!fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
+            if (!programInputObj.binary && !fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
                 if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
                     execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
                 }
@@ -404,12 +410,26 @@ const runVM_ = function (name, body, res) {
                     bin/vulkanRunner $TARGET/program.spv <input >output
                 */
 
-                ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
-                    encoding: 'buffer',
-                    stdio: ['pipe', 'pipe', 'inherit'],
-                    maxBuffer: Infinity,
-                    cwd: './spirv/build'
-                });
+                if (programInputObj.binary) {
+                    fs.writeFileSync(`./spirv/build/targets/${target}/program.spv`, program);
+                }
+
+                if (BuildTarget.platform === 'windows') {
+                    ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
+                        encoding: 'buffer',
+                        stdio: ['pipe', 'pipe', 'inherit'],
+                        maxBuffer: Infinity,
+                        cwd: './spirv/build'
+                    });
+                } else {
+                    ps = exec(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
+                        encoding: 'buffer',
+                        stdio: ['pipe', 'pipe', 'inherit'],
+                        maxBuffer: Infinity,
+                        cwd: './spirv/build'
+                    });
+
+                }
 
             } else {
                 /*
@@ -418,14 +438,26 @@ const runVM_ = function (name, body, res) {
                     $TARGET/program <input >output
                 */
                 if (!fs.existsSync(`./spirv/build/targets/${target}/program${exe}`)) {
-                    execFileSync('make', [
-                        `TARGET=${target}`,
-                        `PLATFORM=${BuildTarget.platform}`,
-                        `ARCH=${BuildTarget.arch}`,
-                        `MY_PLATFORM=${BuildTarget.platform}`,
-                        `MY_ARCH=${BuildTarget.arch}`,
-                        `ispc-cross`, `ispc`, `ispc-bin`
-                    ], { cwd: './spirv/build' });
+                    if (programInputObj.binary) {
+                        fs.writeFileSync(`./spirv/build/targets/${target}/program.o`, program);
+                        execFileSync('make', [
+                            `TARGET=${target}`,
+                            `PLATFORM=${BuildTarget.platform}`,
+                            `ARCH=${BuildTarget.arch}`,
+                            `MY_PLATFORM=${BuildTarget.platform}`,
+                            `MY_ARCH=${BuildTarget.arch}`,
+                            `ispc-bin`
+                        ], { cwd: './spirv/build' });
+                    } else {
+                        execFileSync('make', [
+                            `TARGET=${target}`,
+                            `PLATFORM=${BuildTarget.platform}`,
+                            `ARCH=${BuildTarget.arch}`,
+                            `MY_PLATFORM=${BuildTarget.platform}`,
+                            `MY_ARCH=${BuildTarget.arch}`,
+                            `ispc-cross`, `ispc`, `ispc-bin`
+                        ], { cwd: './spirv/build' });
+                    }
                 }
 
                 ps = execFile(`./targets/${target}/program`, [], {
