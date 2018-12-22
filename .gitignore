@@ -3,3 +3,4 @@ spirv/build/targets
 node_modules
 *~
 \#*\#
+spirv/.DS_Store
