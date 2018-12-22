@@ -97,7 +97,7 @@ class ComputeApplication
 	_setmode(_fileno(stdin), _O_BINARY);
 #endif
 
-        readInput();
+        readHeader();
 
         // Initialize vulkan:
         createInstance();
@@ -117,15 +117,16 @@ class ComputeApplication
 
         // for all input params { ...
 
-        // Write stdin to input buffer
-        writeInput();
+		while (readInput()) {
+	        // Write stdin to input buffer
+    	    writeInput();
 
-        // Finally, run the recorded command buffer.
-        runCommandBuffer();
+        	// Finally, run the recorded command buffer.
+        	runCommandBuffer();
 
-        // Write the output buffer to stdout
-        writeOutput();
-
+        	// Write the output buffer to stdout
+        	writeOutput();
+		}
         // ... }
 
         // ... }
@@ -134,10 +135,8 @@ class ComputeApplication
         cleanup();
     }
 
-    void readInput()
+    void readHeader()
     {
-        ::size_t input_length = 0, read_bytes = 0, input_buffer_size = 4096;
-
         bufferSize = 0;
         read_bytes = fread(&bufferSize, 1, 4, stdin);
         if (read_bytes < 4)
@@ -161,19 +160,32 @@ class ComputeApplication
             workSize[0] = workSize[1] = workSize[2] = 1;
         }
 
-        input = (char *)malloc(input_buffer_size);
-        do
+        inputBufferSize = 0;
+        read_bytes = fread(&inputBufferSize, 1, 4, stdin);
+        if (read_bytes < 4)
         {
-            read_bytes = fread((void *)(input + input_length), 1, 4096, stdin);
-            input_length += read_bytes;
-            if (input_length + 4096 > input_buffer_size)
-            {
-                input_buffer_size *= 2;
-                input = (char *)realloc((void *)input, input_buffer_size);
-            }
-        } while (!feof(stdin));
+            fprintf(stderr, "read only %zd bytes, using default inputBufferSize\n", read_bytes);
+            inputBufferSize = 4;
+        }
+        input = (char *)malloc(inputBufferSize);
+    }
 
-        inputBufferSize = input_length;
+    bool readInput()
+    {
+        ::size_t input_length = 0, read_bytes = 0;
+
+        if (feof(stdin)) {
+        fprintf(stderr, "eof\n");
+        	return false;
+    	}
+
+        while (input_length < inputBufferSize && !feof(stdin))
+        {
+            read_bytes = fread((void *)(input + input_length), 1, inputBufferSize - input_length, stdin);
+            input_length += read_bytes;
+		}
+        fprintf(stderr, "%d\n", input_length);
+		return true;
     }
 
     void writeInput()

@@ -8,6 +8,12 @@ BITS=64
 MY_PLATFORM := $(shell uname | tr [[:upper:]] [[:lower:]] | sed s/darwin/macos/ | sed -E s/mingw.*/windows/ )
 MY_ARCH := $(shell uname -m | tr _ -)
 
+ifeq ($(MY_PLATFORM),linux)
+  ifeq ($(shell uname -o),Android)
+    MY_PLATFORM := android
+  endif
+endif
+
 PLATFORM := $(MY_PLATFORM)
 ARCH := $(MY_ARCH)
 
