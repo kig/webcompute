@@ -123,6 +123,28 @@ try {
                 $TARGET/program <input >output
             */
             if (!fs.existsSync(`./spirv/build/targets/${target}/program.o`)) {
+                if (myPlatform === undefined) {
+                    var myPlatform = 'linux';
+                    var myArch = execSync('uname -m').toString().replace(/\s/g,'').replace('_', '-');
+                    if (/^arm/.test(myArch)) {
+                        myArch = 'arm';
+                    }
+                    if (fs.existsSync('/proc/cpuinfo')) {
+                        if (execSync('uname -o').toString().replace(/\s/g, '') === 'Android') {
+                            myPlatform = 'android';
+                        }
+                    } else if (fs.existsSync('/Library/ColorSync')) {
+                        myPlatform = 'macos';
+                    } else {
+                        throw new Error("Unknown platform");
+                    }
+        
+                    if (!fs.existsSync(`./targets/${target}`)) {
+                        execFileSync('mkdir', ['-p', `./targets/${target}`]);
+                    }
+                    var arch = /^arm/.test(args.arch) ? 'arm' : args.arch;
+                    var bits = arch === 'arm' ? '32' : '64';        
+                }
                 execFileSync('make', [
                     `TARGET=${target}`,
                     `PLATFORM=${args.platform}`,
