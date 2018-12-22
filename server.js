@@ -387,10 +387,10 @@ const runVM_ = function (name, body, res) {
                 cp program.comp.glsl $TARGET/program.comp.glsl
                 make TARGET=$TARGET spirv
             */
+            if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
+                execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
+            }
             if (!programInputObj.binary && !fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
-                if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
-                    execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
-                }
                 fs.writeFileSync(`./spirv/build/targets/${target}/program.comp.glsl`, program);
                 execFileSync('make', [
                     `TARGET=${target}`,
