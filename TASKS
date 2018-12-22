@@ -44,5 +44,16 @@ TASKS
             - how to make GLSL AOBench perf match ISPC
             - how to pass separate kernels to different targets
 
-    [] Windows port
-        [] Run on the Dell laptop /w Win10
+    [x] Windows port
+        [x] Run on the Dell laptop /w Win10
+        [] Run on the i7-3770k
+
+    [x] Termux port
+        [x] Run on Nokia 8
+        [x] Run on Note 5
+        [x] Run on Tab S3
+
+    [] ARM Linux ports
+        [] Run on webcam
+        [] Run on RC car
+        [] Run on light switch
