@@ -1,8 +1,7 @@
 NEXT STEPS
-- GLSL backend
-    [] buildSPIRV()
-        [] Compile .glsl to .spv
-
+	- hook up multi-input runner to front-end
+		- use WebSockets to do interactive run
+	- latency testing
 
 
 TASKS
@@ -17,7 +16,7 @@ TASKS
             [x] Add runner.cpp -like semantics
         [x] GLSL backend target
             [x] Vulkan device enumeration in node info
-            [] /build instance
+            [x] /build instance
             [x] /new instance
         [x] Front-end
             [x] Send GLSL shader to ISPC and Vulkan targets: 
@@ -31,8 +30,8 @@ TASKS
         [] Reducer network
 
     [] Render machinery
-        [] Long-running process for running Vulkan jobs
-            [] Start process on receiving first job
+        [x] Long-running process for running Vulkan jobs
+            [x] Start process on receiving first job
             [] Receive new kernels and inputs via socket
             [] Keep latest shader pipeline + buffer alloc cached
         [] Long-running process for running ISPC with different inputs

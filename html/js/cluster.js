@@ -101,18 +101,51 @@ class Cluster {
 					cluster.disableNode(node);
 					return runJob(input);
 				}
-				const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
 				const bin = program.blob;
-				const body = new Blob([JSON.stringify(args), '\n', bin]);
 				const url = node.url + vmSuffix;
-				var res;
-				try {
-					res = await fetch(url, { method: 'POST', body });
-				} catch (e) {
-					cluster.disableNode(node);
-					runJob(input);
+
+				if (language === 'glsl') {
+					// open a WebSocket to SPIRV process
+					const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
+					if (!node.socket || node.currentProgram !== bin) {
+						if (node.socket) {
+							node.socket.done = true;
+							if (node.socket.done && node.socket.queue.length === 0) {
+								node.socket.close();
+							}
+						}
+						const onSocketResponse = (ev) => {
+							const [onResponse, input, runJob, jobIdx] = node.socket.queue.shift();
+							onResponse(ev.data, input, runJob, jobIdx);
+							if (node.socket.done && node.socket.queue.length === 0) {
+								node.socket.close();
+							}
+						};
+						const ws = new WebSocket(url.replace('http', 'ws'));
+						ws.binaryType = 'arraybuffer';
+						node.socket = ws;
+						ws.queue = [];
+						node.socket.queue.push(onResponse);
+						ws.onmessage = onSocketResponse;
+						ws.send(JSON.stringify(args));
+						ws.send(bin);
+					} else {
+						node.socket.queue.push([onResponse, input, runJob, jobIdx]);
+						node.socket.send(JSON.stringify(input));
+					}
+				} else {
+					// do a normal HTTP request
+					const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
+					const body = new Blob([JSON.stringify(args), '\n', bin]);
+					var res;
+					try {
+						res = await fetch(url, { method: 'POST', body });
+					} catch (e) {
+						cluster.disableNode(node);
+						runJob(input);
+					}
+					return onResponse(res, input, runJob, jobIdx);
 				}
-				return onResponse(res, input, runJob, jobIdx);
 			}, language === 'glsl' ? 'SPIRV' : 'ISPC');
 		};
 		inputs.forEach(runJob);

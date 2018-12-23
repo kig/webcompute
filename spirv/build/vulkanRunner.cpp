@@ -137,6 +137,7 @@ class ComputeApplication
 
     void readHeader()
     {
+        ::size_t input_length = 0, read_bytes = 0;
         bufferSize = 0;
         read_bytes = fread(&bufferSize, 1, 4, stdin);
         if (read_bytes < 4)
@@ -175,7 +176,6 @@ class ComputeApplication
         ::size_t input_length = 0, read_bytes = 0;
 
         if (feof(stdin)) {
-        fprintf(stderr, "eof\n");
         	return false;
     	}
 
@@ -184,8 +184,7 @@ class ComputeApplication
             read_bytes = fread((void *)(input + input_length), 1, inputBufferSize - input_length, stdin);
             input_length += read_bytes;
 		}
-        fprintf(stderr, "%d\n", input_length);
-		return true;
+		return input_length > 0;
     }
 
     void writeInput()

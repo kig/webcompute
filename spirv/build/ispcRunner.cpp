@@ -43,7 +43,7 @@ void readHeader()
     if (read_bytes < 12)
     {
         fprintf(stderr, "read only %zd bytes, using default workSize\n", read_bytes);
-        workSize[0] = workSize[1] = workSize[2] = 1;
+         workSize[0] = workSize[1] = workSize[2] = 1;
     }
 
     inputBufferSize = 0;
@@ -71,7 +71,7 @@ bool readInput()
         read_bytes = fread((void *)(input + input_length + off), 1, inputBufferSize, stdin);
         input_length += read_bytes;
     }
-    return true;
+    return input_length > 0;
 }
 
 int main(int argc, char *argv[])

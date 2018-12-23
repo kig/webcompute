@@ -11,6 +11,7 @@ MY_ARCH := $(shell uname -m | tr _ -)
 ifeq ($(MY_PLATFORM),linux)
   ifeq ($(shell uname -o),Android)
     MY_PLATFORM := android
+	export LD_LIBRARY_PATH=/system/lib64:$(PREFIX)/lib
   endif
 endif
 
