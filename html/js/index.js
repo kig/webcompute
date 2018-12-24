@@ -1,5 +1,7 @@
 
 function send() {
+	var t0 = performance.now();
+
 	window.event.preventDefault();
 	output.textContent = '';
 	var outputType = this.vmoutputtype.value;
@@ -28,69 +30,79 @@ function send() {
 		source: source,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		onResponse: this.vmlanguage.value === 'glsl' ? ([(header, input, runJob, jobIdx, next) => {
-			//if (!outputAnimated) {
-			//	output.textContent = JSON.stringify(header);
-			//}
-		}, (data, input, runJob, jobIdx, next) => {
-			if (data.byteLength > 0) {
-				next();
-			}
-		}, (arrayBuffer, input, runJob, jobIdx, next) => {
-			var tileCount = (outputTilesX * outputTilesY);
-			var frame = Math.floor(jobIdx / tileCount);
-			var tileIdx = jobIdx - (frame * tileCount);
-			var y = Math.floor(tileIdx / outputTilesX);
-			var x = tileIdx - (y * outputTilesX);
-			var output = null;
-			if (!outputAnimated) {
-				output = document.createElement('span');
-				document.getElementById('output').append(output);
-			}
-			if (arrayBuffer.header.type === 'error') {
-				if (!outputAnimated) {
-					output.remove();
-				}
-				runJob(input);
-			} else {
-				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
-			}
-		}]) :
-		function (res, input, runJob, jobIdx) {
-			return new Promise(async (resolve, reject) => {
-				var tileCount = (outputTilesX * outputTilesY);
-				var frame = Math.floor(jobIdx / tileCount);
-				var tileIdx = jobIdx - (frame * tileCount);
-				var y = Math.floor(tileIdx / outputTilesX);
-				var x = tileIdx - (y * outputTilesX);
-				var output = null;
-				if (!outputAnimated) {
-					output = document.createElement('span');
-					document.getElementById('output').append(output);
-				}
-				const arrayBuffer = await Cluster.responseToArrayBuffer(
-					res,
-					(header) => {
-						if (!outputAnimated) {
-							output.textContent = JSON.stringify(header);
-						}
-					},
-					(d) => {
-						if (d.byteLength > 0) {
-							resolve();
-						}
+		useHTTP: false,
+		onResponse: this.vmlanguage.value === 'glsl'
+			? [
+				(header, input, runJob, jobIdx, next) => {
+					//if (!outputAnimated) {
+					//	output.textContent = JSON.stringify(header);
+					//}
+				}, (data, input, runJob, jobIdx, next) => {
+					if (data.byteLength > 0) {
+						next();
 					}
-				);
-				if (arrayBuffer.header.type === 'error') {
+				}, (arrayBuffer, input, runJob, jobIdx, next) => {
+					var tileCount = (outputTilesX * outputTilesY);
+					var frame = Math.floor(jobIdx / tileCount);
+					var tileIdx = jobIdx - (frame * tileCount);
+					var y = Math.floor(tileIdx / outputTilesX);
+					var x = tileIdx - (y * outputTilesX);
+					var output = null;
 					if (!outputAnimated) {
-						output.remove();
+						output = document.createElement('span');
+						document.getElementById('output').append(output);
 					}
-					runJob(input);
-				} else {
-					processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+					if (arrayBuffer.header.type === 'error') {
+						if (!outputAnimated) {
+							output.remove();
+						}
+						runJob(input);
+					} else {
+						var t1 = performance.now();
+						console.log(t1-t0);
+						t0 = t1;
+						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+					}
 				}
-			});
-		}
+			]
+			: function (res, input, runJob, jobIdx) {
+				return new Promise(async (resolve, reject) => {
+					var tileCount = (outputTilesX * outputTilesY);
+					var frame = Math.floor(jobIdx / tileCount);
+					var tileIdx = jobIdx - (frame * tileCount);
+					var y = Math.floor(tileIdx / outputTilesX);
+					var x = tileIdx - (y * outputTilesX);
+					var output = null;
+					if (!outputAnimated) {
+						output = document.createElement('span');
+						document.getElementById('output').append(output);
+					}
+					const arrayBuffer = await Cluster.responseToArrayBuffer(
+						res,
+						(header) => {
+							if (!outputAnimated) {
+								output.textContent = JSON.stringify(header);
+							}
+						},
+						(d) => {
+							if (d.byteLength > 0) {
+								resolve();
+							}
+						}
+					);
+					if (arrayBuffer.header.type === 'error') {
+						if (!outputAnimated) {
+							output.remove();
+						}
+						runJob(input);
+					} else {
+						var t1 = performance.now();
+						console.log(t1-t0);
+						t0 = t1;
+						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+					}
+				});
+			}
 	});
 }
 

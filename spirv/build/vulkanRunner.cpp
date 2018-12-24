@@ -224,6 +224,7 @@ class ComputeApplication
         // Flush the output buffer memory to the CPU.
         vkFlushMappedMemoryRanges(device, 1, &bufferMemoryRange);
         fwrite(mappedMemory, bufferSize, 1, stdout);
+        fflush(stdout);
         vkUnmapMemory(device, bufferMemory);
     }
 

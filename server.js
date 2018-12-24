@@ -20,7 +20,7 @@ const port = 7172;
 
 const httpServer = new http.Server(app);
 
-const wss = new WebSocket.Server({server: httpServer});
+const wss = new WebSocket.Server({ server: httpServer });
 
 app.use(cors());
 app.use(bodyParser.text({ type: "*/*" }));
@@ -389,9 +389,9 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
         /*
             Run on CPU
         */
-       buildSPIRVToISPC(target, program, programInputObj)
+        buildSPIRVToISPC(target, program, programInputObj)
 
-       ps = execFile(`./targets/${target}/program`, [], {
+        ps = execFile(`./targets/${target}/program`, [], {
             encoding: 'buffer',
             stdio: ['pipe', 'pipe', 'inherit'],
             maxBuffer: Infinity,
@@ -402,7 +402,7 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
 
     }
 
-    registerProcess(ps, name, programHash);
+    registerProcess(ps, programInputObj.name, programHash);
     return ps;
 };
 
@@ -420,7 +420,11 @@ const registerProcess = function (ps, name, programHash) {
     ps.imageHash = programHash;
 };
 
-const runSPIRVSocket = function (socket) {
+const runSPIRVSocket = function (socket, req) {
+
+    // console.log("got socket", req.connection.remoteAddress);
+
+    socket.send("READY.");
 
     var time = Date.now();
 
@@ -429,9 +433,10 @@ const runSPIRVSocket = function (socket) {
     var headerMsg = true;
     var outputLength = 0;
     socket.on('message', msg => {
+        // console.log('message', msg);
         if (headerMsg) {
             headerMsg = false;
-            var body = Buffer.from(msg.data);
+            var body = msg;
             const firstLine = body.indexOf(10);
             const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
             const program = body.slice(firstLine + 1);
@@ -440,7 +445,7 @@ const runSPIRVSocket = function (socket) {
             var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
 
             var programInput = new ArrayBuffer(24);
-            var i32 = new Int32Array(programInput, 0, 5);
+            var i32 = new Int32Array(programInput, 0, 6);
             i32[0] = programInputObj.outputLength;
             outputLength = i32[0];
             i32[1] = programInputObj.vulkanDeviceIndex || 0;
@@ -449,26 +454,65 @@ const runSPIRVSocket = function (socket) {
             i32[4] = programInputObj.workgroups[2];
             i32[5] = programInputObj.inputLength;
 
+            // console.log(i32);
+
+            // console.log(program, programInputObj, programHash, target);
+
             ps = createSPIRVProcess(target, program, programInputObj, programHash);
-            
+
             socket.send(
                 JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
             );
 
-            ps.on('close', () => socket.close());
+            ps.on('close', () => {
+                // console.log("ps close");
+                socket.close();
+            });
 
             ps.stdout.encoding = 'buffer';
-        
-            ps.stdout.on('data', (data) => socket.send(data.buffer));
-            ps.stdout.on('close', () => socket.close());
-        
+
+            var chunks = [];
+            var readLength = 0;
+
+            // var sendLength = 0;
+            ps.stdout.on('data', (data) => {
+                // console.log('send', data);
+                socket.send(data);
+                // readLength += data.byteLength;
+                // chunks.push(data);
+                // if (readLength >= outputLength) {
+                //     var buf = Buffer.concat(chunks);
+                //     socket.send(buf.slice(0, outputLength));
+                //     chunks = [];
+                //     readLength = 0;
+                //     if (readLength > outputLength) {
+                //         chunks.push(buf.slice(outputLength));
+                //         readLength = chunks[0].byteLength;
+                //     }
+                // }
+                
+                // sendLength += data.length;
+                // console.log(sendLength);
+            });
+            ps.stdout.on('close', () => {
+                // console.log('stdout close');
+                socket.close();
+            });
+
             ps.stdin.write(Buffer.from(programInput));
         } else {
-            ps.stdin.write(Buffer.from(msg.data));
+            // console.log(new Float32Array(msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength)));
+            ps.stdin.write(msg);
         }
     });
 
-    socket.on('close', () => ps.stdin.end());
+    socket.on('close', () => {
+        console.log("closed socket");
+        if (ps) {
+            ps.stdin.end();
+            ps.kill();
+        }
+    });
 
 };
 
@@ -548,14 +592,14 @@ const runVM_ = function (name, body, res) {
 
         } else if (programInputObj.language === 'glsl') {
 
-            var programInput = new ArrayBuffer(24 + 4 * programInputObj.length);
-            var i32 = new Int32Array(programInput, 0, 5);
+            var programInput = new ArrayBuffer(24 + 4 * programInputObj.input.length);
+            var i32 = new Int32Array(programInput, 0, 6);
             i32[0] = programInputObj.outputLength;
             i32[1] = programInputObj.vulkanDeviceIndex || 0;
             i32[2] = programInputObj.workgroups[0];
             i32[3] = programInputObj.workgroups[1];
             i32[4] = programInputObj.workgroups[2];
-            i32[5] = programInputObj.inputLength;
+            i32[5] = programInputObj.input.length * 4;
 
             var f32 = new Float32Array(programInput, 24, programInputObj.input.length);
             f32.set(programInputObj.input);
@@ -651,24 +695,13 @@ const runVM_ = function (name, body, res) {
 
         }
 
-        ps.name = findName(name);
-        Object.defineProperty(ps, 'status', { get: getStatus });
+        registerProcess(ps, name, programHash);
 
-        processes[ps.pid] = ps;
-        processesByName[ps.name] = ps;
-        ps.on('exit', (code, signal) => {
-            // process.stderr.write('Exit: ' + code + ' ' + signal + '\n')
-            delete processes[ps.pid];
-            delete processesByName[ps.name];
-        });
         ps.on('close', () => res.end());
-        ps.imageHash = programHash;
 
         res.writeHead(200);
         res.write(JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time }) + '\n');
         res.write("application/octet-stream\n");
-
-        ps.stdout.encoding = 'buffer';
 
         ps.stdout.on('data', (msg) => res.write(msg));
         ps.stdout.on('close', () => res.end());

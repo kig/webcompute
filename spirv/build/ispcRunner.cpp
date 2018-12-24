@@ -8,7 +8,7 @@
 #endif
 
 static uint32_t bufferSize = 0;
-static ::size_t inputBufferSize = 0;
+static uint32_t inputBufferSize = 0;
 static uint32_t vulkanDeviceIndex = 0;
 static int32_t workSize[3] = {1, 1, 1};
 
@@ -77,7 +77,7 @@ bool readInput()
 int main(int argc, char *argv[])
 {
     readHeader();
-    // fprintf(stderr, "%d %d %d %d %d %d\n", bufferSize, vulkanDeviceIndex, workSize[0], workSize[1], workSize[2], inputBufferSize);
+    fprintf(stderr, "%d %d %d %d %d %d\n", bufferSize, vulkanDeviceIndex, workSize[0], workSize[1], workSize[2], inputBufferSize);
 
     ispc::outputs *outputs = (ispc::outputs *)malloc(sizeof(ispc::outputs) - 4 + bufferSize);
 
@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
 	    ispc::inputs *inputs = (ispc::inputs *)input;
 	    ispc::runner_main(workSize, *inputs, *outputs);
 	    fwrite(outputs->outputData, 1, bufferSize, stdout);
+        fflush(stdout);
     }
 
     return 0;

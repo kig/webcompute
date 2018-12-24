@@ -25,11 +25,15 @@ class Cluster {
 				return;
 			}
 			var callback = this.workQueue[nodeType].shift();
+			var fired = false;
 			var doNext = () => {
-				this.availableNodes[nodeType].push(node);
-				this.processWorkQueue(nodeType);
+				if (!fired) {
+					fired = true;
+					this.availableNodes[nodeType].push(node);
+					this.processWorkQueue(nodeType);
+				}
 			};
-			callback(node).then(doNext).catch(doNext);
+			callback(node, doNext);
 		}
 	}
 
@@ -80,7 +84,7 @@ class Cluster {
 	}
 
 	static run(options) {
-		const {
+		var {
 			nodes,
 			name,
 			language,
@@ -88,68 +92,125 @@ class Cluster {
 			params,
 			outputLength,
 			onResponse,
-			workgroups
+			workgroups,
+			useHTTP
 		} = options;
 		var green = '';
 		var cluster = this.parse(nodes);
 		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
-		var runJob = (input, jobIdx) => {
-			cluster.getNode(async (node) => {
+		var runJob = (jobInput, jobIndex) => {
+			cluster.getNode(async (node, next) => {
 				const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex);
 				if (!program) {
 					cluster.disableNode(node);
-					return runJob(input);
+					return runJob(jobInput);
 				}
 				const bin = program.blob;
 				const url = node.url + vmSuffix;
 
-				if (language === 'glsl') {
-					// open a WebSocket to SPIRV process
-					const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
-					if (!node.socket || node.currentProgram !== bin) {
-						if (node.socket) {
-							node.socket.done = true;
-							if (node.socket.done && node.socket.queue.length === 0) {
-								node.socket.close();
-							}
-						}
-						const onSocketResponse = (ev) => {
-							const [onResponse, input, runJob, jobIdx] = node.socket.queue.shift();
-							onResponse(ev.data, input, runJob, jobIdx);
-							if (node.socket.done && node.socket.queue.length === 0) {
-								node.socket.close();
-							}
-						};
-						const ws = new WebSocket(url.replace('http', 'ws'));
-						ws.binaryType = 'arraybuffer';
-						node.socket = ws;
-						ws.queue = [];
-						node.socket.queue.push(onResponse);
-						ws.onmessage = onSocketResponse;
-						ws.send(JSON.stringify(args));
-						ws.send(bin);
+				if (!useHTTP && language === 'glsl') {
+					if (!node.socket) {
+						// open a WebSocket to SPIRV process
+						this.createNodeSocket(node, runJob, onResponse, url, next, name, jobInput, jobIndex, outputLength, language, workgroups, program);
 					} else {
-						node.socket.queue.push([onResponse, input, runJob, jobIdx]);
-						node.socket.send(JSON.stringify(input));
+						node.socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
+						node.socket.send(new Float32Array(jobInput).buffer);
 					}
 				} else {
+					let jobIdx = jobIndex;
 					// do a normal HTTP request
-					const args = { input, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
+					const args = { input: jobInput, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
 					const body = new Blob([JSON.stringify(args), '\n', bin]);
 					var res;
 					try {
 						res = await fetch(url, { method: 'POST', body });
 					} catch (e) {
 						cluster.disableNode(node);
-						runJob(input);
+						runJob(jobInput);
 					}
-					return onResponse(res, input, runJob, jobIdx);
+					return onResponse(res, jobInput, runJob, jobIdx);
 				}
 			}, language === 'glsl' ? 'SPIRV' : 'ISPC');
 		};
 		inputs.forEach(runJob);
 		return cluster;
+	}
+
+	static createNodeSocket(node, runJob, onResponse, url, next, name, jobInput, jobIndex, outputLength, language, workgroups, program) {
+		const bin = program.blob;
+		const args = { 
+			name, 
+			inputLength: jobInput.length * 4, 
+			outputLength, 
+			language, 
+			workgroups, 
+			vulkanDeviceIndex: node.vulkanDeviceIndex, 
+			binary: program.isBinary
+		};
+		if (!node.socket) {
+			var gotHeader = false;
+			var header;
+			var receivedBytes = 0;
+			var blocks = [];
+			const workQueue = [];
+			var jobIdx = jobIndex;
+			var input = jobInput;
+			var [onHeader, onData, onBody] = onResponse;
+			const onSocketResponse = (ev) => {
+				if (ev.data === 'READY.') {
+					// Connection init
+					// Send kernel
+					var blob = new Blob([JSON.stringify(args), '\n', bin]);
+					var fr = new FileReader();
+					fr.onload = () => {
+						node.socket.send(fr.result);
+						// Send first input
+						node.socket.send(new Float32Array(jobInput).buffer);
+					};
+					fr.readAsArrayBuffer(blob);
+				} else if (!gotHeader) {
+					// Got kernel process header frame
+					gotHeader = true;
+					header = JSON.parse(ev.data);
+					onHeader(header, jobInput, runJob, jobIndex, next);
+					console.log("header", header);
+				} else {
+					receivedBytes += ev.data.byteLength;
+					// console.log(receivedBytes);
+					if (receivedBytes >= outputLength) {
+						blocks.push(ev.data.slice(0, receivedBytes - outputLength));
+						console.log("got full response", outputLength, receivedBytes);
+						var blob = new Blob(blocks);
+						var fr = new FileReader();
+						var _onBody = onBody;
+						var _jobIdx = jobIdx;
+						fr.onload = () => {
+							fr.result.header = header;
+							_onBody(fr.result, input, runJob, _jobIdx, next);
+						};
+						fr.readAsArrayBuffer(blob);
+
+						if (workQueue.length > 0) {
+							blocks = [];
+							receivedBytes = 0;
+							[[onHeader, onData, onBody], input, runJob, jobIdx, next] = workQueue.shift();
+							onHeader(header);
+						} else {
+							node.socket.close();
+						}
+
+					} else {
+						onData(ev.data, input, runJob, jobIdx, next);
+						blocks.push(ev.data);
+					}
+				}
+			};
+			node.socket = new WebSocket(url.replace('http', 'ws'));
+			node.socket.queue = workQueue;
+			node.socket.binaryType = 'arraybuffer';
+			node.socket.onmessage = onSocketResponse;
+		}
 	}
 
 	static parse(nodeString) {
