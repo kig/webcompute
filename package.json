@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "bonjour": "^3.5.0",
+    "bufferutil": "^4.0.1",
     "cors": "^2.8.5",
     "escape-html": "^1.0.3",
     "express": "^4.16.4",
@@ -10,7 +11,9 @@
     "monaco-editor": "^0.14.3",
     "multer": "^1.4.1",
     "request": "^2.88.0",
-    "vm2": "^3.6.4"
+    "utf-8-validate": "^5.0.2",
+    "vm2": "^3.6.4",
+    "ws": "^6.1.2"
   },
   "scripts": {
     "start": "nodemon server.js"

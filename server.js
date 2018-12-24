@@ -10,11 +10,17 @@ const fs = require('fs');
 const os = require('os');
 const bonjour = require('bonjour')({ interface: '0.0.0.0' });
 const http = require('http');
+const WebSocket = require('ws');
 
 const { fork, exec, execFile, execSync, execFileSync } = require('child_process');
 
+
 const app = express();
 const port = 7172;
+
+const httpServer = new http.Server(app);
+
+const wss = new WebSocket.Server({server: httpServer});
 
 app.use(cors());
 app.use(bodyParser.text({ type: "*/*" }));
@@ -23,7 +29,6 @@ app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x
 app.use('/monaco-editor/min/vs', express.static('node_modules/monaco-editor/min/vs'));
 
 app.use('/', express.static('html'));
-
 
 
 // Platform detection
@@ -297,6 +302,176 @@ app.post('/newGreen/:name?', upload.none(), (req, res) => {
     }
 });
 
+const buildSPV = function (target, program, programInputObj) {
+
+    /*
+        cd spirv/build
+        cp program.comp.glsl $TARGET/program.comp.glsl
+        make TARGET=$TARGET spirv
+    */
+    if (!fs.existsSync(`./spirv/build/targets/${target}`)) {
+        execFileSync('mkdir', ['-p', `./spirv/build/targets/${target}`]);
+    }
+    if (!programInputObj.binary && !fs.existsSync(`./spirv/build/targets/${target}/program.spv`)) {
+        fs.writeFileSync(`./spirv/build/targets/${target}/program.comp.glsl`, program);
+        execFileSync('make', [
+            `TARGET=${target}`,
+            `PLATFORM=${BuildTarget.platform}`,
+            `ARCH=${BuildTarget.arch}`,
+            `MY_PLATFORM=${BuildTarget.platform}`,
+            `MY_ARCH=${BuildTarget.arch}`,
+            `spirv`
+        ], { cwd: './spirv/build' });
+    }
+
+};
+
+const buildSPIRVToISPC = function (target, program, programInputObj) {
+    const exe = BuildTarget.platform === 'windows' ? '.exe' : '';
+
+    if (!fs.existsSync(`./spirv/build/targets/${target}/program${exe}`)) {
+        if (programInputObj.binary) {
+            fs.writeFileSync(`./spirv/build/targets/${target}/program.o`, program);
+            execFileSync('make', [
+                `TARGET=${target}`,
+                `PLATFORM=${BuildTarget.platform}`,
+                `ARCH=${BuildTarget.arch}`,
+                `MY_PLATFORM=${BuildTarget.platform}`,
+                `MY_ARCH=${BuildTarget.arch}`,
+                `ispc-bin`
+            ], { cwd: './spirv/build' });
+        } else {
+            execFileSync('make', [
+                `TARGET=${target}`,
+                `PLATFORM=${BuildTarget.platform}`,
+                `ARCH=${BuildTarget.arch}`,
+                `MY_PLATFORM=${BuildTarget.platform}`,
+                `MY_ARCH=${BuildTarget.arch}`,
+                `ispc-cross`, `ispc`, `ispc-bin`
+            ], { cwd: './spirv/build' });
+        }
+    }
+}
+
+const createSPIRVProcess = function (target, program, programInputObj, programHash) {
+
+    var ps;
+    const exe = BuildTarget.platform === 'windows' ? '.exe' : '';
+
+    buildSPV(target, program, programInputObj);
+
+    if (programInputObj.vulkanDeviceIndex !== undefined) {
+        /*
+            Run on Vulkan
+        */
+
+        if (programInputObj.binary) {
+            fs.writeFileSync(`./spirv/build/targets/${target}/program.spv`, program);
+        }
+
+        if (BuildTarget.platform === 'windows') {
+            ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
+                encoding: 'buffer',
+                stdio: ['pipe', 'pipe', 'inherit'],
+                maxBuffer: Infinity,
+                cwd: './spirv/build'
+            });
+        } else {
+            ps = exec(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
+                encoding: 'buffer',
+                stdio: ['pipe', 'pipe', 'inherit'],
+                maxBuffer: Infinity,
+                cwd: './spirv/build'
+            });
+        }
+
+    } else {
+        /*
+            Run on CPU
+        */
+       buildSPIRVToISPC(target, program, programInputObj)
+
+       ps = execFile(`./targets/${target}/program`, [], {
+            encoding: 'buffer',
+            stdio: ['pipe', 'pipe', 'inherit'],
+            maxBuffer: Infinity,
+            // Set OMP_NUM_THREADS=8 for Android targets
+            env: { ...process.env, 'OMP_NUM_THREADS': '8' },
+            cwd: './spirv/build'
+        });
+
+    }
+
+    registerProcess(ps, name, programHash);
+    return ps;
+};
+
+const registerProcess = function (ps, name, programHash) {
+    ps.name = findName(name);
+    Object.defineProperty(ps, 'status', { get: getStatus });
+
+    processes[ps.pid] = ps;
+    processesByName[ps.name] = ps;
+    ps.on('exit', (code, signal) => {
+        // process.stderr.write('Exit: ' + code + ' ' + signal + '\n')
+        delete processes[ps.pid];
+        delete processesByName[ps.name];
+    });
+    ps.imageHash = programHash;
+};
+
+const runSPIRVSocket = function (socket) {
+
+    var time = Date.now();
+
+    var ps;
+
+    var headerMsg = true;
+    var outputLength = 0;
+    socket.on('message', msg => {
+        if (headerMsg) {
+            headerMsg = false;
+            var body = Buffer.from(msg.data);
+            const firstLine = body.indexOf(10);
+            const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
+            const program = body.slice(firstLine + 1);
+
+            var programHash = crypto.createHash('sha256').update(program).digest('hex');
+            var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
+
+            var programInput = new ArrayBuffer(24);
+            var i32 = new Int32Array(programInput, 0, 5);
+            i32[0] = programInputObj.outputLength;
+            outputLength = i32[0];
+            i32[1] = programInputObj.vulkanDeviceIndex || 0;
+            i32[2] = programInputObj.workgroups[0];
+            i32[3] = programInputObj.workgroups[1];
+            i32[4] = programInputObj.workgroups[2];
+            i32[5] = programInputObj.inputLength;
+
+            ps = createSPIRVProcess(target, program, programInputObj, programHash);
+            
+            socket.send(
+                JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
+            );
+
+            ps.on('close', () => socket.close());
+
+            ps.stdout.encoding = 'buffer';
+        
+            ps.stdout.on('data', (data) => socket.send(data.buffer));
+            ps.stdout.on('close', () => socket.close());
+        
+            ps.stdin.write(Buffer.from(programInput));
+        } else {
+            ps.stdin.write(Buffer.from(msg.data));
+        }
+    });
+
+    socket.on('close', () => ps.stdin.end());
+
+};
+
 const runVM_ = function (name, body, res) {
     function sendResult(result) {
         try {
@@ -372,14 +547,17 @@ const runVM_ = function (name, body, res) {
             });
 
         } else if (programInputObj.language === 'glsl') {
-            var programInput = new ArrayBuffer(programInputObj.input.length * 4 + 20);
+
+            var programInput = new ArrayBuffer(24 + 4 * programInputObj.length);
             var i32 = new Int32Array(programInput, 0, 5);
             i32[0] = programInputObj.outputLength;
             i32[1] = programInputObj.vulkanDeviceIndex || 0;
             i32[2] = programInputObj.workgroups[0];
             i32[3] = programInputObj.workgroups[1];
             i32[4] = programInputObj.workgroups[2];
-            var f32 = new Float32Array(programInput, 20);
+            i32[5] = programInputObj.inputLength;
+
+            var f32 = new Float32Array(programInput, 24, programInputObj.input.length);
             f32.set(programInputObj.input);
 
             /*
@@ -490,7 +668,7 @@ const runVM_ = function (name, body, res) {
         res.write(JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time }) + '\n');
         res.write("application/octet-stream\n");
 
-        ps.stdout.encoding
+        ps.stdout.encoding = 'buffer';
 
         ps.stdout.on('data', (msg) => res.write(msg));
         ps.stdout.on('close', () => res.end());
@@ -532,6 +710,8 @@ const runVM = function (instance, name, body, res) {
 app.post('/new/:name?', (req, res) =>
     bodyAsBuffer(req, buffer => runVM_(req.params.name, buffer, res))
 );
+
+wss.on('connection', runSPIRVSocket);
 
 app.post('/build/:name?', (req, res) =>
     bodyAsBuffer(req, buffer => runVM('./build-instance', 'build-' + req.params.name, buffer, res))
@@ -652,9 +832,28 @@ const fetchNodes = (service, ok, fail) => {
 const updateNodes = () => {
     setTimeout(updateNodes, 10000);
     availableNodes.forEach(n => fetchNodes(n, null, () => unregisterNode(n)));
-}
+};
 
-const getServiceURL = (service) => 'http://' + service.addresses.find(addr => /^(192\.168\.|10\.)/.test(addr)) + ':' + service.port;
+const lanAddr = (addr) => {
+    return /^(192\.168\.|10\.)/.test(addr);
+};
+
+const ipv4Addr = (addr) => {
+    return /^(\d+\.){3}\d+$/.test(addr);
+};
+
+const nonLocalAddr = (addr) => {
+    return !(/^(127\.|fe80)/.test(addr));
+};
+
+const findPrimaryAddress = (service) => {
+    var addr = service.addresses.find(lanAddr);
+    if (!addr) {
+        return service.addresses.find(ipv4Addr) || service.addresses.find(nonLocalAddr) || '127.0.0.1';
+    }
+};
+
+const getServiceURL = (service) => 'http://' + findPrimaryAddress(service) + ':' + service.port;
 const parseService = (service) => ({ ...service, url: service.url || getServiceURL(service) });
 
 const serviceIndex = (service) => availableNodes.findIndex(n => n.url === service.url);
@@ -698,7 +897,7 @@ if (process.argv.length > 2) {
     });
 }
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
     console.log(`NodeVM server up on port ${port} @ ${Date.now()}`)
 
     // Service discovery
