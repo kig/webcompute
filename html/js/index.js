@@ -8,7 +8,7 @@ function send() {
 	var outputAnimated = this.vmoutputanimated.checked;
 	var outputTilesX = parseInt(this.vmoutputtilesx.value || 1);
 	var outputTilesY = parseInt(this.vmoutputtilesy.value || 1);
-	var workgroups = this.vmworkgroups.value.replace(/\s+/g,'').split(",").map(s => parseInt(s)).slice(0,3);
+	var workgroups = this.vmworkgroups.value.replace(/\s+/g, '').split(",").map(s => parseInt(s)).slice(0, 3);
 	while (workgroups.size < 3) workgroups.push(1);
 	if (outputAnimated) {
 		const canvas = document.createElement('canvas');
@@ -28,7 +28,35 @@ function send() {
 		source: source,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
-		onResponse: function (res, input, runJob, jobIdx) {
+		onResponse: this.vmlanguage.value === 'glsl' ? ([(header, input, runJob, jobIdx, next) => {
+			//if (!outputAnimated) {
+			//	output.textContent = JSON.stringify(header);
+			//}
+		}, (data, input, runJob, jobIdx, next) => {
+			if (data.byteLength > 0) {
+				next();
+			}
+		}, (arrayBuffer, input, runJob, jobIdx, next) => {
+			var tileCount = (outputTilesX * outputTilesY);
+			var frame = Math.floor(jobIdx / tileCount);
+			var tileIdx = jobIdx - (frame * tileCount);
+			var y = Math.floor(tileIdx / outputTilesX);
+			var x = tileIdx - (y * outputTilesX);
+			var output = null;
+			if (!outputAnimated) {
+				output = document.createElement('span');
+				document.getElementById('output').append(output);
+			}
+			if (arrayBuffer.header.type === 'error') {
+				if (!outputAnimated) {
+					output.remove();
+				}
+				runJob(input);
+			} else {
+				processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+			}
+		}]) :
+		function (res, input, runJob, jobIdx) {
 			return new Promise(async (resolve, reject) => {
 				var tileCount = (outputTilesX * outputTilesY);
 				var frame = Math.floor(jobIdx / tileCount);
@@ -115,7 +143,7 @@ require(['vs/editor/editor.main'], function () {
 	fetch('examples/ao.comp.glsl').then(res => res.text()).then(text => {
 		var config = {
 			OutputSize: [1228800],
-			Workgroups: [1,1,1],
+			Workgroups: [1, 1, 1],
 			Inputs: [640, 480, 4, 0],
 			OutputType: ['float32gray', '640', '480'],
 			Animated: ['false'],
