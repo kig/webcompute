@@ -1,17 +1,18 @@
-// OutputSize 2073600 
-// Workgroups 12 270 1
-// Inputs 1920 1080 4 0..5
-// OutputType uint8gray 1920 1080
-// Animated false
-// Tiles 1 1
+// OutputSize 76800
+// Workgroups 64 10 1
+// Inputs 1920 1080 0 0...1080:40 1 0..50
+// OutputType uint8gray 1920 40
+// Animated true
+// Tiles 1 27
 
 #version 450
 
-layout (local_size_x = 160, local_size_y = 4, local_size_z = 1 ) in;
+layout (local_size_x = 30, local_size_y = 4, local_size_z = 1 ) in;
 
 layout(std430, binding = 0) readonly buffer inputs
 {
   vec2 iResolution;
+  vec2 offset;
   float subSamples;
   float frame;
 };
@@ -221,10 +222,10 @@ void main()
 {
     int width = int(iResolution.x);
     int height = int(iResolution.y);
-    vec2 fragCoord = gl_GlobalInvocationID.xy;
+    vec2 fragCoord = gl_GlobalInvocationID.xy + offset;
     fragCoord.y = iResolution.y - fragCoord.y;
   	vec2 uv = fragCoord.xy / iResolution.xy;
-	  vec2 duv = ((fragCoord.xy+1.0) / iResolution.xy) - uv;
+	vec2 duv = ((fragCoord.xy+1.0) / iResolution.xy) - uv;
     float fragColor = 0.0;
     seed = int(mod((fragCoord.x+0.5) * (fragCoord.y*iResolution.y+0.5), 65536.0));
 	
@@ -233,7 +234,7 @@ void main()
 
 	sphere[0].center = vec3(-2.0, 0.0, -3.5);
 	sphere[0].radius = 0.5;
-	sphere[1].center = vec3(-0.5, 0.0, -3.0 + sin(frame));
+	sphere[1].center = vec3(-0.5, 0.0, -3.0 + sin(frame/10.0));
 	sphere[1].radius = 0.5;
 	sphere[2].center = vec3(1.0, 0.0, -2.2);
 	sphere[2].radius = 0.5;

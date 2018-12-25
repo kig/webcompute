@@ -179,8 +179,9 @@ class Cluster {
 					receivedBytes += ev.data.byteLength;
 					// console.log(receivedBytes);
 					if (receivedBytes >= outputLength) {
-						blocks.push(ev.data.slice(0, receivedBytes - outputLength));
-						console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
+						var offset = ev.data.byteLength - (receivedBytes - outputLength);
+						blocks.push(ev.data.slice(0, offset));
+						// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
 						var blob = new Blob(blocks);
 						var fr = new FileReader();
 						var _onBody = onBody;
@@ -196,8 +197,8 @@ class Cluster {
 							[[onHeader, onData, onBody], input, runJob, jobIdx, next] = workQueue.shift();
 							onHeader(header);
 							receivedBytes -= outputLength;
-							if (receivedBytes > 0) {
-								var firstSlice = ev.data.slice(ev.data.byteLength - receivedBytes);
+							if (offset < ev.data.length) {
+								var firstSlice = ev.data.slice(offset);
 								onData(firstSlice, input, runJob, jobIdx, next);
 								blocks.push(firstSlice);
 							}

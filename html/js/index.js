@@ -1,7 +1,5 @@
 
 function send() {
-	var t0 = performance.now();
-
 	window.event.preventDefault();
 	output.textContent = '';
 	var outputType = this.vmoutputtype.value;
@@ -58,9 +56,6 @@ function send() {
 						}
 						runJob(input);
 					} else {
-						var t1 = performance.now();
-						console.log(t1-t0);
-						t0 = t1;
 						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 					}
 				}
@@ -96,9 +91,6 @@ function send() {
 						}
 						runJob(input);
 					} else {
-						var t1 = performance.now();
-						console.log(t1-t0);
-						t0 = t1;
 						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 					}
 				});
