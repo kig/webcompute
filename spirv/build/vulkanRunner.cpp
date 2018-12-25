@@ -214,6 +214,7 @@ class ComputeApplication
 
     void writeInput()
     {
+        // vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedInputMemory);
         memcpy(mappedInputMemory, input, inputBufferSize);
 
         VkMappedMemoryRange inputBufferMemoryRange = {
@@ -225,10 +226,12 @@ class ComputeApplication
 
         // Flush the CPU memory to the input buffer.
         vkFlushMappedMemoryRanges(device, 1, &inputBufferMemoryRange);
+        // vkUnmapMemory(device, inputBufferMemory);
     }
 
     void writeOutput()
     {
+        // vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedOutputMemory);
         VkMappedMemoryRange bufferMemoryRange = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
             .pNext = NULL,
@@ -240,6 +243,7 @@ class ComputeApplication
         vkFlushMappedMemoryRanges(device, 1, &bufferMemoryRange);
         fwrite(mappedOutputMemory, bufferSize, 1, stdout);
         fflush(stdout);
+        // vkUnmapMemory(device, bufferMemory);
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
@@ -771,7 +775,7 @@ class ComputeApplication
         */
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;    // the buffer is only submitted and used once in this application.
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
         VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); // start recording commands.
 
         /*
@@ -827,8 +831,8 @@ class ComputeApplication
         and we will not be sure that the command has finished executing unless we wait for the fence.
         Hence, we use a fence here.
         */
-        VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000));
-
+        VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, 10000000000000));
+        VK_CHECK_RESULT(vkResetFences(device, 1, &fence));
     }
 
     void cleanup()
