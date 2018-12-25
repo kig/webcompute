@@ -78,6 +78,11 @@ class ComputeApplication
 
     VkQueue queue; // a queue supporting compute operations.
 
+    VkFence fence;
+
+    void *mappedInputMemory = NULL;
+    void *mappedOutputMemory = NULL;
+
     uint32_t queueFamilyIndex;
 
     uint32_t vulkanDeviceIndex = 0;
@@ -117,6 +122,9 @@ class ComputeApplication
 
         // for all input params { ...
 
+        createFence();
+        mapMemory();
+
 		while (readInput()) {
 	        // Write stdin to input buffer
     	    writeInput();
@@ -127,12 +135,27 @@ class ComputeApplication
         	// Write the output buffer to stdout
         	writeOutput();
 		}
+
+        unmapMemory();
         // ... }
 
         // ... }
 
         // Clean up all vulkan resources.
         cleanup();
+    }
+
+    void mapMemory()
+    {
+        // Map the buffer memory, so that we can read from it on the CPU.
+        vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedInputMemory);
+        vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedOutputMemory);
+    }
+
+    void unmapMemory()
+    {
+        vkUnmapMemory(device, inputBufferMemory);
+        vkUnmapMemory(device, bufferMemory);
     }
 
     void readHeader()
@@ -182,19 +205,16 @@ class ComputeApplication
         while (input_length < inputBufferSize && !feof(stdin))
         {
             read_bytes = fread((void *)(input + input_length), 1, inputBufferSize - input_length, stdin);
+            // fprintf(stderr, "read %lu bytes\n", read_bytes);
             input_length += read_bytes;
 		}
+        // fprintf(stderr, "got %lu bytes, stdin feof %d\n", input_length, feof(stdin));
 		return input_length > 0;
     }
 
     void writeInput()
     {
-        void *mappedMemory = NULL;
-        // Map the buffer memory, so that we can read from it on the CPU.
-        vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedMemory);
-
-        memcpy(mappedMemory, input, inputBufferSize);
-        free(input);
+        memcpy(mappedInputMemory, input, inputBufferSize);
 
         VkMappedMemoryRange inputBufferMemoryRange = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -205,15 +225,10 @@ class ComputeApplication
 
         // Flush the CPU memory to the input buffer.
         vkFlushMappedMemoryRanges(device, 1, &inputBufferMemoryRange);
-        vkUnmapMemory(device, inputBufferMemory);
     }
 
     void writeOutput()
     {
-        void *mappedMemory = NULL;
-        // Map the buffer memory, so that we can read from it on the CPU.
-        vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
-
         VkMappedMemoryRange bufferMemoryRange = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
             .pNext = NULL,
@@ -223,9 +238,8 @@ class ComputeApplication
 
         // Flush the output buffer memory to the CPU.
         vkFlushMappedMemoryRanges(device, 1, &bufferMemoryRange);
-        fwrite(mappedMemory, bufferSize, 1, stdout);
+        fwrite(mappedOutputMemory, bufferSize, 1, stdout);
         fflush(stdout);
-        vkUnmapMemory(device, bufferMemory);
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
@@ -778,8 +792,16 @@ class ComputeApplication
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
 
-    void runCommandBuffer()
-    {
+    void createFence() {
+
+        /*
+          We create a fence.
+        */
+        VkFenceCreateInfo fenceCreateInfo = {};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.flags = 0;
+        VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
+        
         /*
         Now we shall finally submit the recorded command buffer to a queue.
         */
@@ -790,18 +812,14 @@ class ComputeApplication
         submitInfo.pCommandBuffers = &commandBuffer; // the command buffer to submit.
 
         /*
-          We create a fence.
-        */
-        VkFence fence;
-        VkFenceCreateInfo fenceCreateInfo = {};
-        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceCreateInfo.flags = 0;
-        VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
-
-        /*
         We submit the command buffer on the queue, at the same time giving a fence.
         */
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+
+    }
+
+    void runCommandBuffer()
+    {
         /*
         The command will not have finished executing until the fence is signalled.
         So we wait here.
@@ -811,7 +829,6 @@ class ComputeApplication
         */
         VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000));
 
-        vkDestroyFence(device, fence, NULL);
     }
 
     void cleanup()
@@ -831,7 +848,9 @@ class ComputeApplication
             func(instance, debugReportCallback, NULL);
         }
 
+        vkDestroyFence(device, fence, NULL);
         vkFreeMemory(device, bufferMemory, NULL);
+        vkFreeMemory(device, inputBufferMemory, NULL);
         vkDestroyBuffer(device, buffer, NULL);
         vkDestroyBuffer(device, inputBuffer, NULL);
         vkDestroyShaderModule(device, computeShaderModule, NULL);

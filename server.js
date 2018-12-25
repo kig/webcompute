@@ -465,11 +465,9 @@ const runSPIRVSocket = function (socket, req) {
             );
 
             ps.on('close', () => {
-                // console.log("ps close");
+                console.log("ps close");
                 socket.close();
             });
-
-            ps.stdout.encoding = 'buffer';
 
             var chunks = [];
             var readLength = 0;
@@ -495,7 +493,7 @@ const runSPIRVSocket = function (socket, req) {
                 // console.log(sendLength);
             });
             ps.stdout.on('close', () => {
-                // console.log('stdout close');
+                console.log('stdout close');
                 socket.close();
             });
 
