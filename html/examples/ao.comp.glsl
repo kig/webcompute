@@ -1,6 +1,6 @@
 // OutputSize 2073600 
 // Workgroups 12 270 1
-// Inputs 1920 1080 4
+// Inputs 1920 1080 4 0..5
 // OutputType uint8gray 1920 1080
 // Animated false
 // Tiles 1 1
@@ -11,7 +11,9 @@ layout (local_size_x = 160, local_size_y = 4, local_size_z = 1 ) in;
 
 layout(std430, binding = 0) readonly buffer inputs
 {
-  float dimensions[];
+  vec2 iResolution;
+  float subSamples;
+  float frame;
 };
 
 layout(std430, binding = 1) buffer outputs
@@ -217,11 +219,10 @@ float computeAO(inout Intersection isect)
 
 void main()
 {
-    vec2 iResolution = vec2(dimensions[0], dimensions[1]);
-    int width = int(dimensions[0]);
-    int height = int(dimensions[1]);
+    int width = int(iResolution.x);
+    int height = int(iResolution.y);
     vec2 fragCoord = gl_GlobalInvocationID.xy;
-    fragCoord.y = dimensions[1] - fragCoord.y;
+    fragCoord.y = iResolution.y - fragCoord.y;
   	vec2 uv = fragCoord.xy / iResolution.xy;
 	  vec2 duv = ((fragCoord.xy+1.0) / iResolution.xy) - uv;
     float fragColor = 0.0;
@@ -232,18 +233,17 @@ void main()
 
 	sphere[0].center = vec3(-2.0, 0.0, -3.5);
 	sphere[0].radius = 0.5;
-	sphere[1].center = vec3(-0.5, 0.0, -3.0);
+	sphere[1].center = vec3(-0.5, 0.0, -3.0 + sin(frame));
 	sphere[1].radius = 0.5;
 	sphere[2].center = vec3(1.0, 0.0, -2.2);
 	sphere[2].radius = 0.5;
 	plane.p = vec3(0,-0.5, 0);
 	plane.n = vec3(0, 1.0, 0);
 
-    float subSamples = dimensions[2];
     for (float y = 0.; y < subSamples; y++) {
         for (float x = 0.; x < subSamples; x++) {
             vec2 fuv = (uv + (vec2(x, y) * duv / subSamples)) * 2.0 - 1.0;
-			fuv.x *= dimensions[0] / dimensions[1];
+			fuv.x *= iResolution.x / iResolution.y;
             
             ray.org = vec3(0.0);
             ray.dir = normalize(vec3(fuv, -1.0));
@@ -263,5 +263,6 @@ void main()
 	uint pxoff = uint(width * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x);
 	uint px4off = pxoff / 4;
 	uint byteIdx = pxoff - px4off * 4;
+	atomicAnd(imageData[px4off], ~(uint(255) << (8 * byteIdx)));
     atomicOr(imageData[px4off], uint(255.0 * fragColor / (subSamples * subSamples)) << (8 * byteIdx));
 }
