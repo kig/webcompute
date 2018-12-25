@@ -882,6 +882,7 @@ const findPrimaryAddress = (service) => {
     if (!addr) {
         return service.addresses.find(ipv4Addr) || service.addresses.find(nonLocalAddr) || '127.0.0.1';
     }
+    return addr;
 };
 
 const getServiceURL = (service) => 'http://' + findPrimaryAddress(service) + ':' + service.port;
