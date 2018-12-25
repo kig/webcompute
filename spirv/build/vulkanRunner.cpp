@@ -771,7 +771,7 @@ class ComputeApplication
         */
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;    // the buffer is only submitted and used once in this application.
+        beginInfo.flags = 0;    // the buffer is only submitted and used once in this application.
         VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); // start recording commands.
 
         /*
@@ -806,6 +806,10 @@ class ComputeApplication
         Now we shall finally submit the recorded command buffer to a queue.
         */
 
+    }
+
+    void runCommandBuffer()
+    {
         VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;           // submit a single command buffer
@@ -816,10 +820,6 @@ class ComputeApplication
         */
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
 
-    }
-
-    void runCommandBuffer()
-    {
         /*
         The command will not have finished executing until the fence is signalled.
         So we wait here.
