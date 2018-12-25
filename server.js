@@ -430,77 +430,91 @@ const runSPIRVSocket = function (socket, req) {
 
     var ps;
 
+    var socketError;
+
     var headerMsg = true;
     var outputLength = 0;
     socket.on('message', msg => {
         // console.log('message', msg);
         if (headerMsg) {
-            headerMsg = false;
-            var body = msg;
-            const firstLine = body.indexOf(10);
-            const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
-            const program = body.slice(firstLine + 1);
+            try {
+                headerMsg = false;
+                var body = msg;
+                const firstLine = body.indexOf(10);
+                const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
+                const program = body.slice(firstLine + 1);
 
-            var programHash = crypto.createHash('sha256').update(program).digest('hex');
-            var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
+                var programHash = crypto.createHash('sha256').update(program).digest('hex');
+                var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
 
-            var programInput = new ArrayBuffer(24);
-            var i32 = new Int32Array(programInput, 0, 6);
-            i32[0] = programInputObj.outputLength;
-            outputLength = i32[0];
-            i32[1] = programInputObj.vulkanDeviceIndex || 0;
-            i32[2] = programInputObj.workgroups[0];
-            i32[3] = programInputObj.workgroups[1];
-            i32[4] = programInputObj.workgroups[2];
-            i32[5] = programInputObj.inputLength;
+                var programInput = new ArrayBuffer(24);
+                var i32 = new Int32Array(programInput, 0, 6);
+                i32[0] = programInputObj.outputLength;
+                outputLength = i32[0];
+                i32[1] = programInputObj.vulkanDeviceIndex || 0;
+                i32[2] = programInputObj.workgroups[0];
+                i32[3] = programInputObj.workgroups[1];
+                i32[4] = programInputObj.workgroups[2];
+                i32[5] = programInputObj.inputLength;
 
-            // console.log(i32);
+                // console.log(i32);
 
-            // console.log(program, programInputObj, programHash, target);
+                // console.log(program, programInputObj, programHash, target);
 
-            ps = createSPIRVProcess(target, program, programInputObj, programHash);
+                ps = createSPIRVProcess(target, program, programInputObj, programHash);
 
-            socket.send(
-                JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
-            );
+                socket.send(
+                    JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
+                );
 
-            ps.on('close', () => {
-                console.log("ps close");
-                socket.close();
-            });
+                ps.on('close', () => {
+                    console.log("ps close");
+                    socket.close();
+                });
 
-            var chunks = [];
-            var readLength = 0;
+                var chunks = [];
+                var readLength = 0;
 
-            // var sendLength = 0;
-            ps.stdout.on('data', (data) => {
-                // console.log('send', data);
-                socket.send(data);
-                // readLength += data.byteLength;
-                // chunks.push(data);
-                // if (readLength >= outputLength) {
-                //     var buf = Buffer.concat(chunks);
-                //     socket.send(buf.slice(0, outputLength));
-                //     chunks = [];
-                //     readLength = 0;
-                //     if (readLength > outputLength) {
-                //         chunks.push(buf.slice(outputLength));
-                //         readLength = chunks[0].byteLength;
-                //     }
-                // }
-                
-                // sendLength += data.length;
-                // console.log(sendLength);
-            });
-            ps.stdout.on('close', () => {
-                console.log('stdout close');
-                socket.close();
-            });
+                // var sendLength = 0;
+                ps.stdout.on('data', (data) => {
+                    // console.log('send', data);
+                    socket.send(data);
+                    // readLength += data.byteLength;
+                    // chunks.push(data);
+                    // if (readLength >= outputLength) {
+                    //     var buf = Buffer.concat(chunks);
+                    //     socket.send(buf.slice(0, outputLength));
+                    //     chunks = [];
+                    //     readLength = 0;
+                    //     if (readLength > outputLength) {
+                    //         chunks.push(buf.slice(outputLength));
+                    //         readLength = chunks[0].byteLength;
+                    //     }
+                    // }
 
-            ps.stdin.write(Buffer.from(programInput));
+                    // sendLength += data.length;
+                    // console.log(sendLength);
+                });
+                ps.stdout.on('close', () => {
+                    console.log('stdout close');
+                    socket.close();
+                });
+
+                ps.stdin.write(Buffer.from(programInput));
+            } catch (err) {
+                socketError = JSON.stringify(err);
+                console.log(err);
+                socket.send(socketError);
+            }
         } else {
             // console.log(new Float32Array(msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength)));
-            ps.stdin.write(msg);
+            try {
+                ps.stdin.write(msg);
+            } catch (err) {
+                socketError = socketError || JSON.stringify(err);
+                socket.send(socketError);
+            }
+
         }
     });
 
