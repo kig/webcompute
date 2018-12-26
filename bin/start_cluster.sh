@@ -4,6 +4,7 @@ HOSTS=$(cat `dirname $BASH_SOURCE`/../etc/cluster_hosts)
 
 for f in $HOSTS
 do 
-  ssh $f 'cd code/node-ispc; npm start'
+  ssh $f 'cd code/node-ispc; npm start' &
 done
 
+wait
