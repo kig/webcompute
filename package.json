@@ -17,8 +17,8 @@
   "scripts": {
     "start": "forever start --pidFile /tmp/nodevm.pid -w --watchDirectory=src src/server.js",
     "stop": "forever stop --pidFile /tmp/nodevm.pid src/server.js",
-    "start_cluster": "bin/start_cluster.sh",
-    "stop_cluster": "bin/stop_cluster.sh",
-    "push_update": "bin/push_update.sh"
+    "start-cluster": "bin/start_cluster.sh",
+    "stop-cluster": "bin/stop_cluster.sh",
+    "push-update": "bin/push_update.sh"
   }
 }
