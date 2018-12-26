@@ -1,20 +1,18 @@
 {
   "dependencies": {
     "bonjour": "^3.5.0",
-    "bufferutil": "^4.0.1",
     "cors": "^2.8.5",
     "escape-html": "^1.0.3",
     "express": "^4.16.4",
-    "express-graphql": "^0.6.12",
     "express-session": "^1.15.6",
     "forever": "^0.15.3",
-    "graphql": "^14.0.2",
     "monaco-editor": "^0.14.3",
-    "multer": "^1.4.1",
     "request": "^2.88.0",
-    "utf-8-validate": "^5.0.2",
-    "vm2": "^3.6.4",
     "ws": "^6.1.2"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.1",
+    "utf-8-validate": "^5.0.2"
   },
   "scripts": {
     "start": "forever start --pidFile /tmp/nodevm.pid -w --watchDirectory=src src/server.js",
@@ -22,8 +20,5 @@
     "start_cluster": "bin/start_cluster.sh",
     "stop_cluster": "bin/stop_cluster.sh",
     "push_update": "bin/push_update.sh"
-  },
-  "devDependencies": {
-    "nodemon": "^1.18.7"
   }
 }

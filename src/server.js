@@ -1,11 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const escape = require('escape-html');
-const multer = require('multer'); // v1.0.5
-const upload = multer();
 const crypto = require('crypto');
-const { NodeVM } = require('vm2');
 const fs = require('fs');
 const os = require('os');
 const bonjour = require('bonjour')({ interface: '0.0.0.0' });
@@ -23,8 +19,6 @@ const httpServer = new http.Server(app);
 const wss = new WebSocket.Server({ server: httpServer });
 
 app.use(cors());
-app.use(bodyParser.text({ type: "*/*" }));
-app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 
 app.use('/monaco-editor/min/vs', express.static('node_modules/monaco-editor/min/vs'));
 
@@ -257,50 +251,6 @@ function sendResult(res, result) {
     }
 }
 
-
-app.post('/newGreen/:name?', upload.none(), (req, res) => {
-    const t0 = Date.now();
-    const startTime = Date.now();
-    const psName = findName(req.params.name);
-    const info = { pid: process.pid, name: psName, time: t0 };
-    const state = { waiting: false, result: undefined };
-    const script = req.body;
-    const vm = new NodeVM({
-        wrapper: 'none',
-        sandbox: { state, info },
-        require: {
-            external: true
-        }
-    });
-
-    try {
-        var result = vm.run(script, info.name);
-    } catch (err) {
-        res.writeHead(500);
-        sendResult(res, err.stack.toString());
-        res.end();
-        return;
-    }
-
-    res.writeHead(200);
-
-    if (state.waiting) {
-        var waitInterval = setInterval(() => {
-            if (!state.waiting) {
-                clearInterval(waitInterval);
-                var t1 = Date.now();
-                sendResult(res, state.result);
-                res.write("\n------ Elapsed: " + (t1 - t0) + " ms\n")
-                res.end("------ Total Elapsed: " + (t1 - startTime) + " ms\n")
-            }
-        }, 30);
-    } else {
-        var t1 = Date.now();
-        sendResult(res, result);
-        res.write("\n------ Elapsed: " + (t1 - t0) + " ms\n")
-        res.end("------ Total Elapsed: " + (t1 - startTime) + " ms\n")
-    }
-});
 
 const buildSPV = function (target, program, programInputObj) {
 
@@ -788,7 +738,7 @@ app.get('/vm/:pid', (req, res) => {
     }
 });
 
-app.post('/signal/:pid/:signal', upload.none(), (req, res) => {
+app.post('/signal/:pid/:signal', (req, res) => {
     var pid = req.params.pid;
     var signal = req.params.signal || 'SIGTERM';
     if (processes[pid] || processesByName[pid]) {
