@@ -40,6 +40,7 @@ function send() {
 						next();
 					}
 				}, (arrayBuffer, input, runJob, jobIdx, next) => {
+					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
 					var tileIdx = jobIdx - (frame * tileCount);
@@ -215,3 +216,10 @@ var updateVMNodes = function () {
 };
 
 fetch('/nodes').then(res => res.json()).then(addNodes);
+
+output.onclick = (ev) => {
+	if (ev.target.tagName === 'CANVAS') {
+		ev.preventDefault();
+		ev.target.requestFullscreen();
+	}
+};
