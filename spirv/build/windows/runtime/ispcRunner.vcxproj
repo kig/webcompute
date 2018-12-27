@@ -24,8 +24,8 @@
     <RootNamespace>ispcRunner</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ClCompile Include="../ispcRunner.cpp" />
-<!--    <CustomBuild Include="ispcRunner.obj" />-->
+    <!-- <ClCompile Include="../../../../ispcRunner.cpp" /> -->
+    <CustomBuild Include="ispcRunner.obj" />
     <CustomBuild Include="tasksys.obj" />
     <CustomBuild Include="program.obj" />
   </ItemGroup>

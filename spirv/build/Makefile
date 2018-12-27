@@ -47,13 +47,6 @@ spirv:
 	mkdir -p targets/$(TARGET)
 	../$(GLSL_VALIDATOR)-$(MY_PLATFORM)-$(MY_ARCH) --target-env vulkan1.0 targets/$(TARGET)/program.comp.glsl -o targets/$(TARGET)/program.spv
 
-runner:
-	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -std=c++11
-
-ispc-runner:
-	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11
-
 ispc-cross:
 	../$(SPIRV_CROSS_ISPC)-$(MY_PLATFORM)-$(MY_ARCH) --ispc targets/$(TARGET)/program.spv --output targets/$(TARGET)/program.ispc-raw
 	ruby bin/fix_ispc_input_output_order <targets/$(TARGET)/program.ispc-raw >targets/$(TARGET)/program.ispc
@@ -64,13 +57,27 @@ ispc:
 	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
 
 ifeq ($(PLATFORM),windows)
+runner:
+	mkdir -p bin
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH).exe vulkanRunner.cpp -lvulkan-1 -std=c++14 -I /c/VulkanSDK/*/Include -L /c/VulkanSDK/*/Lib
+
+ispc-runner:
+	(cd windows/; "/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"; mv x64/Release/ispcRunner.obj runtime/ispcRunner.obj)
+
 ispc-bin:
-	mkdir -p targets/$(TARGET)/windows
-	cp windows/* targets/$(TARGET)/windows/
+	mkdir -p targets/$(TARGET)/windows/
+	cp windows/runtime/* targets/$(TARGET)/windows/
 	cp targets/$(TARGET)/program.o targets/$(TARGET)/windows/program.obj
 	(cd targets/$(TARGET)/windows; "/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"; mv x64/Release/ispcRunner.exe ../program.exe)
 
 else
+runner:
+	mkdir -p bin
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -std=c++11
+
+ispc-runner:
+	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11
+
 ispc-bin:
 	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11 $(OMP)
 endif

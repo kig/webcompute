@@ -1,5 +1,6 @@
 ispc/build/targets
 spirv/build/targets
+spirv/build/windows/x64
 node_modules
 *~
 \#*\#
