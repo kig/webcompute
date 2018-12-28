@@ -1,13 +1,13 @@
-// OutputSize 76800
-// Workgroups 64 10 1
-// Inputs 1920 1080 0 0...1080:40 1 0..50
-// OutputType uint8gray 1920 40
+// OutputSize 5120
+// Workgroups 4 20 1
+// Inputs 1920 1080 0...1920:128 0...1080:40 1 0..50
+// OutputType uint8gray 128 40
 // Animated true
-// Tiles 1 27
+// Tiles 15 27
 
 #version 450
 
-layout (local_size_x = 30, local_size_y = 4, local_size_z = 1 ) in;
+layout (local_size_x = 32, local_size_y = 2, local_size_z = 1 ) in;
 
 layout(std430, binding = 0) readonly buffer inputs
 {
@@ -261,7 +261,8 @@ void main()
             }
         }
     }
-	uint pxoff = uint(width * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x);
+	uint tileWidth = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+	uint pxoff = uint(tileWidth * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x);
 	uint px4off = pxoff / 4;
 	uint byteIdx = pxoff - px4off * 4;
 	atomicAnd(imageData[px4off], ~(uint(255) << (8 * byteIdx)));
