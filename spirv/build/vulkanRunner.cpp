@@ -98,8 +98,8 @@ class ComputeApplication
         programFileName = fileName;
 
 #ifdef WIN32
-	_setmode(_fileno(stdout), _O_BINARY);
-	_setmode(_fileno(stdin), _O_BINARY);
+        _setmode(_fileno(stdout), _O_BINARY);
+        _setmode(_fileno(stdin), _O_BINARY);
 #endif
 
         readHeader();
@@ -126,13 +126,10 @@ class ComputeApplication
         mapMemory();
 
 		while (readInput()) {
-	        // Write stdin to input buffer
     	    writeInput();
-
-        	// Finally, run the recorded command buffer.
-        	runCommandBuffer();
-
-        	// Write the output buffer to stdout
+            startCommandBuffer();
+        	waitCommandBuffer();
+            readOutput();
         	writeOutput();
 		}
 
@@ -229,7 +226,8 @@ class ComputeApplication
         // vkUnmapMemory(device, inputBufferMemory);
     }
 
-    void writeOutput()
+
+    void readOutput() 
     {
         // vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedOutputMemory);
         VkMappedMemoryRange bufferMemoryRange = {
@@ -240,7 +238,11 @@ class ComputeApplication
             .size = VK_WHOLE_SIZE};
 
         // Flush the output buffer memory to the CPU.
-        vkInvalidateMappedMemoryRanges(device, 1, &bufferMemoryRange);
+        vkInvalidateMappedMemoryRanges(device, 1, &bufferMemoryRange);        
+    }
+
+    void writeOutput()
+    {
         fwrite(mappedOutputMemory, bufferSize, 1, stdout);
         fflush(stdout);
         // vkUnmapMemory(device, bufferMemory);
@@ -812,7 +814,7 @@ class ComputeApplication
 
     }
 
-    void runCommandBuffer()
+    void startCommandBuffer()
     {
         VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -823,7 +825,10 @@ class ComputeApplication
         We submit the command buffer on the queue, at the same time giving a fence.
         */
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+    }
 
+    void waitCommandBuffer()
+    {
         /*
         The command will not have finished executing until the fence is signalled.
         So we wait here.
@@ -879,6 +884,7 @@ int main(int argc, char *argv[])
     catch (const std::runtime_error &e)
     {
         printf("%s\n", e.what());
+        app.cleanup();
         return EXIT_FAILURE;
     }
 

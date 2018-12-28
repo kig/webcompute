@@ -59,7 +59,7 @@ ispc:
 ifeq ($(PLATFORM),windows)
 runner:
 	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH).exe vulkanRunner.cpp -lvulkan-1 -std=c++14 -I /c/VulkanSDK/*/Include -L /c/VulkanSDK/*/Lib
+	clang++ -Iobjs/ -DWIN32 -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH).exe vulkanRunner.cpp -lvulkan-1 -std=c++14 -I /c/VulkanSDK/*/Include -L /c/VulkanSDK/*/Lib
 
 ispc-runner:
 	(cd windows/; "/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/MSBuild/15.0/Bin/amd64/MSBuild.exe" "-p:Configuration=Release;Platform=x64"; mv x64/Release/ispcRunner.obj runtime/ispcRunner.obj)

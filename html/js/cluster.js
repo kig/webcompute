@@ -161,6 +161,14 @@ class Cluster {
 				socket.binaryType = 'arraybuffer';
 				socket.onerror = reject;
 				socket.started = false;
+				socket.closeTimeout = setInterval(() => {
+					if (socket.gotHeader && !socket.started && performance.now() > socket.lastMessageTime + 100 && socket.queue.length === 0) {
+						clearTimeout(socket.closeTimeout);
+						delete node.sockets[program.hash];
+						console.log("closing socket");
+						socket.close();
+					}
+				}, 100);
 				socket.processQueue = function () {
 					if (this.queue.length > 0) {
 						var [[onHeader, onData, onBody], input, runJob, jobIdx, next] = this.queue.shift();
@@ -172,9 +180,13 @@ class Cluster {
 						if (this.blocks.length > 0) {
 							this.blocks.forEach(b => this.onData(b, ...this.kernelArgs));
 						}
+					} else {
+						this.started = false;
 					}
 				};
+				socket.lastMessageTime = performance.now();
 				socket.onmessage = function (ev) {
+					this.lastMessageTime = performance.now();
 					if (ev.data === 'READY.') {
 						// Connection init
 						// Send kernel
@@ -191,57 +203,67 @@ class Cluster {
 						console.log("header", this.header);
 						resolve(this);
 					} else {
-						if (!this.started) {
-							this.started = true;
-							this.processQueue();
-						}
-						this.receivedBytes += ev.data.byteLength;
-						// console.log(receivedBytes);
-						if (this.receivedBytes >= this.programArgs.outputLength) {
-							var offset = ev.data.byteLength - (this.receivedBytes - this.programArgs.outputLength);
-							var lastSlice = ev.data.slice(0, offset);
-							this.onData(lastSlice, ...this.kernelArgs);
-							this.blocks.push(lastSlice);
-							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
-							var ab = this.blocks[0];
-							if (this.blocks.length > 1) {
-								ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
-								var u8 = new Uint8Array(ab);
-								this.blocks.reduce((offset, b) => {
-									u8.set(new Uint8Array(b), offset);
-									return offset + b.byteLength
-								}, 0);
-							}
-							this.handleResult(ab, offset, ev)
-						} else {
-							this.onData(ev.data, ...this.kernelArgs);
-							this.blocks.push(ev.data);
-						}
+						this.addBlock(ev.data);
 					}
 				};
 
-				socket.handleResult = function(result, offset, ev) {
+				socket.addBlock = function(block) {
+					if (!this.started) {
+						this.started = true;
+						this.processQueue();
+					}
+					this.receivedBytes += block.byteLength;
+					// console.log(receivedBytes);
+					if (this.receivedBytes >= this.programArgs.outputLength) {
+						var offset = block.byteLength - (this.receivedBytes - this.programArgs.outputLength);
+						var lastSlice = block.slice(0, offset);
+						this.onData(lastSlice, ...this.kernelArgs);
+						this.blocks.push(lastSlice);
+						// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
+						var ab = this.blocks[0];
+						if (this.blocks.length > 1) {
+							ab = Cluster.concatArrayBuffers(this.blocks);
+						}
+						this.handleResult(ab, offset, block)
+					} else {
+						this.onData(block, ...this.kernelArgs);
+						this.blocks.push(block);
+					}
+				};
+
+				socket.handleResult = function(result, offset, block) {
 					result.header = this.header;
 					if (this.onBody) {
 						this.onBody(result, ...this.kernelArgs);
 					} else {
 						this.result = result;
 					}
-					this.onHeader = this.onBody = null;
-					this.onData = () => { };
+					this.onHeader = this.onBody = this.onData = null;
 					this.blocks = [];
 					this.receivedBytes -= this.programArgs.outputLength;
-					if (offset < ev.data.length) {
-						var firstSlice = ev.data.slice(offset);
-						this.blocks.push(firstSlice);
-						this.processQueue();
-					} else {
-						this.started = false;
+					this.started = false;
+					if (offset < block.length) {
+						var firstSlice = block.slice(offset);
+						this.addBlock(firstSlice);
 					}
 				};
 			});
 		}
 		return node.sockets[program.hash];
+	}
+
+	static concatArrayBuffers(blocks) {
+		let totalLength = 0;
+		for (let i = 0; i < blocks.length; i++) {
+			totalLength += blocks[i].byteLength;
+		}
+		let u8 = new Uint8Array(totalLength);
+		for (let i = 0, offset = 0; i < blocks.length; i++) {
+			u8.set(new Uint8Array(blocks[i]), offset, blocks[i].byteLength);
+			offset += blocks[i].byteLength;
+		}
+		console.log(totalLength, u8.length, u8.buffer.byteLength);
+		return u8.buffer;
 	}
 
 	static parse(nodeString) {

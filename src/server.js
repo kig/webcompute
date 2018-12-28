@@ -372,7 +372,7 @@ const registerProcess = function (ps, name, programHash) {
 
 const runSPIRVSocket = function (socket, req) {
 
-    // console.log("got socket", req.connection.remoteAddress);
+    console.log("socket open");
 
     socket.send("READY.");
 
@@ -382,17 +382,26 @@ const runSPIRVSocket = function (socket, req) {
 
     var socketError;
 
+    var programInputObj = {VkPhysicalDeviceProperties: {deviceName: '[no header received]'}};
+
     var headerMsg = true;
     var outputLength = 0;
     socket.on('message', msg => {
-        // console.log('message', msg);
         if (headerMsg) {
             try {
                 headerMsg = false;
                 var body = msg;
                 const firstLine = body.indexOf(10);
-                const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
+                programInputObj = JSON.parse(body.slice(0, firstLine).toString());
                 const program = body.slice(firstLine + 1);
+
+                programInputObj.vulkanDevice = nodeInfo.vulkanDevices[programInputObj.vulkanDeviceIndex];
+
+                if (!programInputObj.vulkanDevice) {
+                    programInputObj.vulkanDevice = {VkPhysicalDeviceProperties: {deviceName: "CPU [ISPC]"}};
+                }
+
+                console.log("socket first message", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
 
                 var programHash = crypto.createHash('sha256').update(program).digest('hex');
                 var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
@@ -407,72 +416,62 @@ const runSPIRVSocket = function (socket, req) {
                 i32[4] = programInputObj.workgroups[2];
                 i32[5] = programInputObj.inputLength;
 
-                // console.log(i32);
-
-                // console.log(program, programInputObj, programHash, target);
-
                 ps = createSPIRVProcess(target, program, programInputObj, programHash);
+
+
+                console.log("  ps open", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
 
                 socket.send(
                     JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
                 );
 
                 ps.on('close', () => {
-                    console.log("ps close");
+                    console.log("  ps close", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
                 });
 
                 var chunks = [];
                 var readLength = 0;
 
-                // var sendLength = 0;
                 ps.stdout.on('data', (data) => {
-                    // console.log('send', data);
-                    socket.send(data);
-                    // readLength += data.byteLength;
-                    // chunks.push(data);
-                    // if (readLength >= outputLength) {
-                    //     var buf = Buffer.concat(chunks);
-                    //     socket.send(buf.slice(0, outputLength));
-                    //     chunks = [];
-                    //     readLength = 0;
-                    //     if (readLength > outputLength) {
-                    //         chunks.push(buf.slice(outputLength));
-                    //         readLength = chunks[0].byteLength;
-                    //     }
-                    // }
-
-                    // sendLength += data.length;
-                    // console.log(sendLength);
+                    try {
+                        socket.send(data);
+                    } catch (err) {
+                        console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
+                        socket.close();
+                    }
                 });
                 ps.stdout.on('close', () => {
-                    console.log('stdout close');
+                    console.log('  ps.stdout close', programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
                 });
 
                 ps.stdin.write(Buffer.from(programInput));
             } catch (err) {
                 socketError = JSON.stringify(err);
-                console.log(err);
-                socket.send(socketError);
+                console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
+                try {
+                    socket.send(socketError);
+                } catch(e) {}
             }
         } else {
-            // console.log(new Float32Array(msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength)));
             try {
                 ps.stdin.write(msg);
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);
-                socket.send(socketError);
+                console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
+                try {
+                    socket.send(socketError);
+                } catch(e) {}
             }
 
         }
     });
 
     socket.on('close', () => {
-        console.log("closed socket");
+        console.log("closed socket", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
         if (ps) {
             ps.stdin.end();
-            ps.kill();
         }
     });
 
