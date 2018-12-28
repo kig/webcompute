@@ -372,6 +372,8 @@ const registerProcess = function (ps, name, programHash) {
 
 const runSPIRVSocket = function (socket, req) {
 
+    console.log("socket open");
+
     socket.send("READY.");
 
     var time = Date.now();
@@ -379,6 +381,8 @@ const runSPIRVSocket = function (socket, req) {
     var ps;
 
     var socketError;
+
+    var programInputObj = {VkPhysicalDeviceProperties: {deviceName: '[no header received]'}};
 
     var headerMsg = true;
     var outputLength = 0;
@@ -388,8 +392,16 @@ const runSPIRVSocket = function (socket, req) {
                 headerMsg = false;
                 var body = msg;
                 const firstLine = body.indexOf(10);
-                const programInputObj = JSON.parse(body.slice(0, firstLine).toString());
+                programInputObj = JSON.parse(body.slice(0, firstLine).toString());
                 const program = body.slice(firstLine + 1);
+
+                programInputObj.vulkanDevice = nodeInfo.vulkanDevices[programInputObj.vulkanDeviceIndex];
+
+                if (!programInputObj.vulkanDevice) {
+                    programInputObj.vulkanDevice = {VkPhysicalDeviceProperties: {deviceName: "CPU [ISPC]"}};
+                }
+
+                console.log("socket first message", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
 
                 var programHash = crypto.createHash('sha256').update(program).digest('hex');
                 var target = programInputObj.language + "-" + BuildTarget.cpusig + '/' + programHash;
@@ -406,12 +418,15 @@ const runSPIRVSocket = function (socket, req) {
 
                 ps = createSPIRVProcess(target, program, programInputObj, programHash);
 
+
+                console.log("  ps open", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
+
                 socket.send(
                     JSON.stringify({ pid: ps.pid, name: ps.name, hash: 'sha256:' + ps.imageHash, startTime: time })
                 );
 
                 ps.on('close', () => {
-                    console.log("ps close");
+                    console.log("  ps close", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
                 });
 
@@ -422,19 +437,19 @@ const runSPIRVSocket = function (socket, req) {
                     try {
                         socket.send(data);
                     } catch (err) {
-                        console.log(err);
+                        console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
                         socket.close();
                     }
                 });
                 ps.stdout.on('close', () => {
-                    console.log('stdout close');
+                    console.log('  ps.stdout close', programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
                 });
 
                 ps.stdin.write(Buffer.from(programInput));
             } catch (err) {
                 socketError = JSON.stringify(err);
-                console.log(err);
+                console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
                 try {
                     socket.send(socketError);
                 } catch(e) {}
@@ -444,6 +459,7 @@ const runSPIRVSocket = function (socket, req) {
                 ps.stdin.write(msg);
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);
+                console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
                 try {
                     socket.send(socketError);
                 } catch(e) {}
@@ -453,7 +469,7 @@ const runSPIRVSocket = function (socket, req) {
     });
 
     socket.on('close', () => {
-        console.log("closed socket");
+        console.log("closed socket", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
         if (ps) {
             ps.stdin.end();
         }
