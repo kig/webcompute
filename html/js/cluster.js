@@ -116,7 +116,7 @@ class Cluster {
 				if (!useHTTP && language === 'glsl') {
 					const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
 					socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
-					socket.processQueue();
+					socket.send(new Float32Array(jobInput).buffer);
 				} else {
 					let jobIdx = jobIndex;
 					// do a normal HTTP request
@@ -160,6 +160,7 @@ class Cluster {
 				socket.receivedBytes = 0;
 				socket.binaryType = 'arraybuffer';
 				socket.onerror = reject;
+				socket.started = false;
 				socket.processQueue = function () {
 					if (this.queue.length > 0) {
 						var [[onHeader, onData, onBody], input, runJob, jobIdx, next] = this.queue.shift();
@@ -171,7 +172,6 @@ class Cluster {
 						if (this.blocks.length > 0) {
 							this.blocks.forEach(b => this.onData(b, ...this.kernelArgs));
 						}
-						this.send(new Float32Array(input).buffer);
 					}
 				};
 				socket.onmessage = function (ev) {
@@ -191,6 +191,10 @@ class Cluster {
 						console.log("header", this.header);
 						resolve(this);
 					} else {
+						if (!this.started) {
+							this.started = true;
+							this.processQueue();
+						}
 						this.receivedBytes += ev.data.byteLength;
 						// console.log(receivedBytes);
 						if (this.receivedBytes >= this.programArgs.outputLength) {
@@ -199,28 +203,23 @@ class Cluster {
 							this.onData(lastSlice, ...this.kernelArgs);
 							this.blocks.push(lastSlice);
 							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
+							var ab = this.blocks[0];
 							if (this.blocks.length > 1) {
-								var ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
+								ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
 								var u8 = new Uint8Array(ab);
 								this.blocks.reduce((offset, b) => {
 									u8.set(new Uint8Array(b), offset);
 									return offset + b.byteLength
 								}, 0);
-								this.handleResult(ab, offset, ev)
-
-								// var blob = new Blob(this.blocks);
-								// var fr = new FileReader();
-								// fr.onload = () => this.handleResult(fr.result, offset, ev);
-								// fr.readAsArrayBuffer(blob);
-							} else {
-								this.handleResult(this.blocks[0], offset, ev)
 							}
+							this.handleResult(ab, offset, ev)
 						} else {
 							this.onData(ev.data, ...this.kernelArgs);
 							this.blocks.push(ev.data);
 						}
 					}
 				};
+
 				socket.handleResult = function(result, offset, ev) {
 					result.header = this.header;
 					if (this.onBody) {
@@ -235,8 +234,10 @@ class Cluster {
 					if (offset < ev.data.length) {
 						var firstSlice = ev.data.slice(offset);
 						this.blocks.push(firstSlice);
+						this.processQueue();
+					} else {
+						this.started = false;
 					}
-					this.processQueue();
 				};
 			});
 		}

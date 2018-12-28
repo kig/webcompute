@@ -12,7 +12,7 @@ void runner_tiled(uniform int3 gl_NumWorkGroups, uniform struct inputs& input, u
         varying int3 gl_GlobalInvocationID = gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID;
         varying int gl_LocalInvocationIndex = gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
         
-        program_ispc_main(gl_GlobalInvocationID, input, output);
+        program_ispc_main(gl_NumWorkGroups, gl_WorkGroupID, gl_LocalInvocationID, gl_GlobalInvocationID, gl_LocalInvocationIndex, input, output);
     }
 }
 
