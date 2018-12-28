@@ -35,6 +35,7 @@ TASKS
                 - If a node takes 5 ms for 1 work unit and 45 ms for 11 work units, work unit cost is 4 ms, pipeline wait 1 ms => enqueue 3 work units to hit 16 ms latency target (3 * 4 + 1 = 13)
                 [] Time work unit runtime
                 [] Measure work unit cost & scaling
+            [] Async I/O to overlap fwrite and kernel execution
 
     [x] Windows port
         [x] Run on the Dell laptop /w Win10
