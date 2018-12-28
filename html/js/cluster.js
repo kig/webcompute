@@ -8,7 +8,8 @@ class Cluster {
 		this.availableNodes.SPIRV = [];
 		nodes.forEach(n => {
 			(n.info.vulkanDevices || []).forEach((vd, idx) => {
-				this.availableNodes.SPIRV.push({ ...n, vulkanDeviceIndex: idx, sockets: {} });
+				var vulkanNode = { ...n, vulkanDeviceIndex: idx, sockets: {} };
+				this.availableNodes.SPIRV.push(vulkanNode);
 			});
 			n.sockets = {};
 			this.availableNodes.SPIRV.push(n);
@@ -199,18 +200,18 @@ class Cluster {
 							this.blocks.push(lastSlice);
 							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
 							if (this.blocks.length > 1) {
-								// var ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
-								// var u8 = new Uint8Array(ab);
-								// this.blocks.reduce((offset, b) => {
-								// 	u8.set(new Uint8Array(b), offset);
-								// 	return offset + b.byteLength
-								// }, 0);
-								// this.handleResult(ab, offset, ev)
+								var ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
+								var u8 = new Uint8Array(ab);
+								this.blocks.reduce((offset, b) => {
+									u8.set(new Uint8Array(b), offset);
+									return offset + b.byteLength
+								}, 0);
+								this.handleResult(ab, offset, ev)
 
-								var blob = new Blob(this.blocks);
-								var fr = new FileReader();
-								fr.onload = () => this.handleResult(fr.result, offset, ev);
-								fr.readAsArrayBuffer(blob);
+								// var blob = new Blob(this.blocks);
+								// var fr = new FileReader();
+								// fr.onload = () => this.handleResult(fr.result, offset, ev);
+								// fr.readAsArrayBuffer(blob);
 							} else {
 								this.handleResult(this.blocks[0], offset, ev)
 							}
