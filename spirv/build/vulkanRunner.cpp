@@ -240,7 +240,7 @@ class ComputeApplication
             .size = VK_WHOLE_SIZE};
 
         // Flush the output buffer memory to the CPU.
-        vkFlushMappedMemoryRanges(device, 1, &bufferMemoryRange);
+        vkInvalidateMappedMemoryRanges(device, 1, &bufferMemoryRange);
         fwrite(mappedOutputMemory, bufferSize, 1, stdout);
         fflush(stdout);
         // vkUnmapMemory(device, bufferMemory);
