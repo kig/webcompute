@@ -372,8 +372,6 @@ const registerProcess = function (ps, name, programHash) {
 
 const runSPIRVSocket = function (socket, req) {
 
-    // console.log("got socket", req.connection.remoteAddress);
-
     socket.send("READY.");
 
     var time = Date.now();
@@ -385,7 +383,6 @@ const runSPIRVSocket = function (socket, req) {
     var headerMsg = true;
     var outputLength = 0;
     socket.on('message', msg => {
-        // console.log('message', msg);
         if (headerMsg) {
             try {
                 headerMsg = false;
@@ -407,10 +404,6 @@ const runSPIRVSocket = function (socket, req) {
                 i32[4] = programInputObj.workgroups[2];
                 i32[5] = programInputObj.inputLength;
 
-                // console.log(i32);
-
-                // console.log(program, programInputObj, programHash, target);
-
                 ps = createSPIRVProcess(target, program, programInputObj, programHash);
 
                 socket.send(
@@ -425,25 +418,13 @@ const runSPIRVSocket = function (socket, req) {
                 var chunks = [];
                 var readLength = 0;
 
-                // var sendLength = 0;
                 ps.stdout.on('data', (data) => {
-                    // console.log('send', data);
-                    socket.send(data);
-                    // readLength += data.byteLength;
-                    // chunks.push(data);
-                    // if (readLength >= outputLength) {
-                    //     var buf = Buffer.concat(chunks);
-                    //     socket.send(buf.slice(0, outputLength));
-                    //     chunks = [];
-                    //     readLength = 0;
-                    //     if (readLength > outputLength) {
-                    //         chunks.push(buf.slice(outputLength));
-                    //         readLength = chunks[0].byteLength;
-                    //     }
-                    // }
-
-                    // sendLength += data.length;
-                    // console.log(sendLength);
+                    try {
+                        socket.send(data);
+                    } catch (err) {
+                        console.log(err);
+                        socket.close();
+                    }
                 });
                 ps.stdout.on('close', () => {
                     console.log('stdout close');
@@ -454,15 +435,18 @@ const runSPIRVSocket = function (socket, req) {
             } catch (err) {
                 socketError = JSON.stringify(err);
                 console.log(err);
-                socket.send(socketError);
+                try {
+                    socket.send(socketError);
+                } catch(e) {}
             }
         } else {
-            // console.log(new Float32Array(msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength)));
             try {
                 ps.stdin.write(msg);
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);
-                socket.send(socketError);
+                try {
+                    socket.send(socketError);
+                } catch(e) {}
             }
 
         }
@@ -472,7 +456,6 @@ const runSPIRVSocket = function (socket, req) {
         console.log("closed socket");
         if (ps) {
             ps.stdin.end();
-            ps.kill();
         }
     });
 
