@@ -8,8 +8,9 @@ class Cluster {
 		this.availableNodes.SPIRV = [];
 		nodes.forEach(n => {
 			(n.info.vulkanDevices || []).forEach((vd, idx) => {
-				this.availableNodes.SPIRV.push({ ...n, vulkanDeviceIndex: idx });
+				this.availableNodes.SPIRV.push({ ...n, vulkanDeviceIndex: idx, sockets: {} });
 			});
+			n.sockets = {};
 			this.availableNodes.SPIRV.push(n);
 		});
 		this.workQueue = { ISPC: [], SPIRV: [] };
@@ -42,9 +43,10 @@ class Cluster {
 		this.processWorkQueue(nodeType);
 	}
 
-	async build(node, name, source, language, vulkanDeviceIndex) {
+	async build(node, name, source, language, vulkanDeviceIndex, inputLength, outputLength) {
+		var hash = await sha256(JSON.stringify({ language, vulkanDeviceIndex, inputLength, outputLength, source }));
 		if (node.info.canBuild || (vulkanDeviceIndex != null && language === 'glsl')) {
-			return { blob: new Blob([source]), isBinary: false };
+			return { blob: new Blob([source]), isBinary: false, hash };
 		} else {
 			const vmSuffix = '/build/' + name;
 			const args = {
@@ -72,7 +74,7 @@ class Cluster {
 					const url = buildNode.url + vmSuffix;
 					const res = await fetch(url, { method: 'POST', body });
 					const blob = await Cluster.responseToBlob(res);
-					resolve({ blob, isBinary: true });
+					resolve({ blob, isBinary: true, hash });
 				});
 			}
 			return Cluster.buildCache[key];
@@ -101,7 +103,8 @@ class Cluster {
 		var vmSuffix = '/new' + green + '/' + name;
 		var runJob = (jobInput, jobIndex) => {
 			cluster.getNode(async (node, next) => {
-				const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex);
+				const inputLength = jobInput.length * 4;
+				const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex, inputLength, outputLength);
 				if (!program) {
 					cluster.disableNode(node);
 					return runJob(jobInput);
@@ -110,13 +113,9 @@ class Cluster {
 				const url = node.url + vmSuffix;
 
 				if (!useHTTP && language === 'glsl') {
-					if (!node.socket) {
-						// open a WebSocket to SPIRV process
-						this.createNodeSocket(node, runJob, onResponse, url, next, name, jobInput, jobIndex, outputLength, language, workgroups, program);
-					} else {
-						node.socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
-						node.socket.send(new Float32Array(jobInput).buffer);
-					}
+					const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
+					socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
+					socket.processQueue();
 				} else {
 					let jobIdx = jobIndex;
 					// do a normal HTTP request
@@ -137,87 +136,110 @@ class Cluster {
 		return cluster;
 	}
 
-	static createNodeSocket(node, runJob, onResponse, url, next, name, jobInput, jobIndex, outputLength, language, workgroups, program) {
-		const bin = program.blob;
-		const args = { 
-			name, 
-			inputLength: jobInput.length * 4, 
-			outputLength, 
-			language, 
-			workgroups, 
-			vulkanDeviceIndex: node.vulkanDeviceIndex, 
-			binary: program.isBinary
-		};
-		if (!node.socket) {
-			var gotHeader = false;
-			var header;
-			var receivedBytes = 0;
-			var blocks = [];
-			const workQueue = [];
-			var jobIdx = jobIndex;
-			var input = jobInput;
-			var [onHeader, onData, onBody] = onResponse;
-			const onSocketResponse = (ev) => {
-				if (ev.data === 'READY.') {
-					// Connection init
-					// Send kernel
-					var blob = new Blob([JSON.stringify(args), '\n', bin]);
-					var fr = new FileReader();
-					fr.onload = () => {
-						node.socket.send(fr.result);
-						// Send first input
-						node.socket.send(new Float32Array(jobInput).buffer);
-					};
-					fr.readAsArrayBuffer(blob);
-				} else if (!gotHeader) {
-					// Got kernel process header frame
-					gotHeader = true;
-					header = JSON.parse(ev.data);
-					onHeader(header, jobInput, runJob, jobIndex, next);
-					console.log("header", header);
-				} else {
-					receivedBytes += ev.data.byteLength;
-					// console.log(receivedBytes);
-					if (receivedBytes >= outputLength) {
-						var offset = ev.data.byteLength - (receivedBytes - outputLength);
-						blocks.push(ev.data.slice(0, offset));
-						// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
-						var blob = new Blob(blocks);
+	static async getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength) {
+		if (!node.sockets[program.hash]) {
+			node.sockets[program.hash] = new Promise((resolve, reject) => {
+				const bin = program.blob;
+				const workQueue = [];
+				const socket = new WebSocket(url.replace('http', 'ws'));
+				socket.programArgs = {
+					name,
+					inputLength,
+					outputLength,
+					language,
+					workgroups,
+					vulkanDeviceIndex: node.vulkanDeviceIndex,
+					binary: program.isBinary
+				};
+				socket.program = program;
+				socket.queue = workQueue;
+				socket.blocks = [];
+				socket.kernelArgs = [];
+				socket.gotHeader = false;
+				socket.receivedBytes = 0;
+				socket.binaryType = 'arraybuffer';
+				socket.onerror = reject;
+				socket.processQueue = function () {
+					if (this.queue.length > 0) {
+						var [[onHeader, onData, onBody], input, runJob, jobIdx, next] = this.queue.shift();
+						this.onHeader = onHeader;
+						this.onBody = onBody;
+						this.onData = onData;
+						this.kernelArgs = [input, runJob, jobIdx, next];
+						this.onHeader(this.header, ...this.kernelArgs);
+						if (this.blocks.length > 0) {
+							this.blocks.forEach(b => this.onData(b, ...this.kernelArgs));
+						}
+						this.send(new Float32Array(input).buffer);
+					}
+				};
+				socket.onmessage = function (ev) {
+					if (ev.data === 'READY.') {
+						// Connection init
+						// Send kernel
+						var blob = new Blob([JSON.stringify(this.programArgs), '\n', bin]);
 						var fr = new FileReader();
-						var _onBody = onBody;
-						var _jobIdx = jobIdx;
 						fr.onload = () => {
-							fr.result.header = header;
-							_onBody(fr.result, input, runJob, _jobIdx, next);
+							this.send(fr.result);
 						};
 						fr.readAsArrayBuffer(blob);
+					} else if (!this.gotHeader) {
+						// Got kernel process header frame
+						this.gotHeader = true;
+						this.header = JSON.parse(ev.data);
+						console.log("header", this.header);
+						resolve(this);
+					} else {
+						this.receivedBytes += ev.data.byteLength;
+						// console.log(receivedBytes);
+						if (this.receivedBytes >= this.programArgs.outputLength) {
+							var offset = ev.data.byteLength - (this.receivedBytes - this.programArgs.outputLength);
+							var lastSlice = ev.data.slice(0, offset);
+							this.onData(lastSlice, ...this.kernelArgs);
+							this.blocks.push(lastSlice);
+							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
+							if (this.blocks.length > 1) {
+								// var ab = new ArrayBuffer(this.blocks.reduce(((s,b) => s + b.byteLength), 0));
+								// var u8 = new Uint8Array(ab);
+								// this.blocks.reduce((offset, b) => {
+								// 	u8.set(new Uint8Array(b), offset);
+								// 	return offset + b.byteLength
+								// }, 0);
+								// this.handleResult(ab, offset, ev)
 
-						if (workQueue.length > 0) {
-							blocks = [];
-							[[onHeader, onData, onBody], input, runJob, jobIdx, next] = workQueue.shift();
-							onHeader(header);
-							receivedBytes -= outputLength;
-							if (offset < ev.data.length) {
-								var firstSlice = ev.data.slice(offset);
-								onData(firstSlice, input, runJob, jobIdx, next);
-								blocks.push(firstSlice);
+								var blob = new Blob(this.blocks);
+								var fr = new FileReader();
+								fr.onload = () => this.handleResult(fr.result, offset, ev);
+								fr.readAsArrayBuffer(blob);
+							} else {
+								this.handleResult(this.blocks[0], offset, ev)
 							}
 						} else {
-							console.log('closing socket', node.vulkanDeviceIndex);
-							node.socket.close();
+							this.onData(ev.data, ...this.kernelArgs);
+							this.blocks.push(ev.data);
 						}
-
-					} else {
-						onData(ev.data, input, runJob, jobIdx, next);
-						blocks.push(ev.data);
 					}
-				}
-			};
-			node.socket = new WebSocket(url.replace('http', 'ws'));
-			node.socket.queue = workQueue;
-			node.socket.binaryType = 'arraybuffer';
-			node.socket.onmessage = onSocketResponse;
+				};
+				socket.handleResult = function(result, offset, ev) {
+					result.header = this.header;
+					if (this.onBody) {
+						this.onBody(result, ...this.kernelArgs);
+					} else {
+						this.result = result;
+					}
+					this.onHeader = this.onBody = null;
+					this.onData = () => { };
+					this.blocks = [];
+					this.receivedBytes -= this.programArgs.outputLength;
+					if (offset < ev.data.length) {
+						var firstSlice = ev.data.slice(offset);
+						this.blocks.push(firstSlice);
+					}
+					this.processQueue();
+				};
+			});
 		}
+		return node.sockets[program.hash];
 	}
 
 	static parse(nodeString) {

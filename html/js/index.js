@@ -131,6 +131,7 @@ function processResponse(arrayBuffer, output, outputType, outputWidth, outputHei
 			outputFunc(resultArray, outputWidth, outputHeight, tileCanvas);
 			var ctx = targetCanvas.getContext('2d');
 			ctx.globalCompositeOperator = 'copy';
+			// console.log(x, y, outputWidth, outputHeight, tileCanvas.width, tileCanvas.height);
 			ctx.drawImage(tileCanvas, x * tileCanvas.width, y * tileCanvas.height);
 
 		} else {
