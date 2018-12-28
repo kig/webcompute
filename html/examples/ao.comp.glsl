@@ -1,13 +1,13 @@
-// OutputSize 5120
-// Workgroups 4 20 1
-// Inputs 1920 1080 0...1920:128 0...1080:40 1 0..50
-// OutputType uint8gray 128 40
+// OutputSize 38400
+// Workgroups 30 10 1
+// Inputs 1920 1080 0...1920:960 0...1080:40 4 0..200
+// OutputType uint8gray 960 40
 // Animated true
-// Tiles 15 27
+// Tiles 2 27
 
 #version 450
 
-layout (local_size_x = 32, local_size_y = 2, local_size_z = 1 ) in;
+layout (local_size_x = 32, local_size_y = 4, local_size_z = 1 ) in;
 
 layout(std430, binding = 0) readonly buffer inputs
 {
