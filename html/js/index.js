@@ -20,6 +20,8 @@ function send() {
 		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/).test(line))
 		.join("\n");
 
+	var lastFrame = performance.now();
+
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -40,6 +42,10 @@ function send() {
 						next();
 					}
 				}, (arrayBuffer, input, runJob, jobIdx, next) => {
+					var t = performance.now();
+					var elapsed = t - lastFrame;
+					lastFrame = t;
+					console.log(elapsed);
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
