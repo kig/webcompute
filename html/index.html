@@ -2,7 +2,7 @@
 <html>
 
 <head>
-	<title>ISPC Playground</title>
+	<title>Compute Playground</title>
 	<link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -32,7 +32,9 @@
 				<input id="addnode"><button onclick="addNode()">Add node</button>
 			</p>
 			<h4>Input array</h4>
-			<p><input id="vmparams" placeholder="Input param array (e.g. 640,480,4,0..30,{2,4,8},12)"></p>
+			<p><input id="vmparams" placeholder="Input param array (e.g. 640,480,4,0..30,{2,4,8},12, Time, TimeDelta, MouseX, MouseY, Buttons, DragDx)"></p>
+			<h4>Scratch buffer size in bytes</h4>
+			<p><input id="vmscratchsize" placeholder="Scratch buffer size in bytes"></p>
 			<h4>Output array size in bytes</h4>
 			<p><input id="vmoutputsize" placeholder="Output array size in bytes"></p>
 			<h4>Output type</h4>
@@ -50,6 +52,7 @@
 					<p><input id="vmoutputwidth" placeholder="Width"><input id="vmoutputheight" placeholder="Height"></p>
 					<p>
 						<input type="checkbox" id="vmoutputanimated"> <label for="vmoutputanimated">Animated</label>
+						<input type="checkbox" id="vmoutputinteractive"> <label for="vmoutputinteractive">Interactive</label>
 						<input id="vmoutputtilesx" placeholder="X tiles"><input id="vmoutputtilesy" placeholder="Y tiles">
 					</p>
 				</div>
