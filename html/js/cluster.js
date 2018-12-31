@@ -117,6 +117,9 @@ class Cluster {
 					const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
 					socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
 					socket.send(new Float32Array(jobInput).buffer);
+					if (node.vulkanDeviceIndex !== undefined) {
+						next();
+					}
 				} else {
 					let jobIdx = jobIndex;
 					// do a normal HTTP request
@@ -152,9 +155,9 @@ class Cluster {
 					vulkanDeviceIndex: node.vulkanDeviceIndex,
 					binary: program.isBinary
 				};
+				socket.u8 = new Uint8Array(outputLength);
 				socket.program = program;
 				socket.queue = workQueue;
-				socket.blocks = [];
 				socket.kernelArgs = [];
 				socket.gotHeader = false;
 				socket.receivedBytes = 0;
@@ -177,9 +180,6 @@ class Cluster {
 						this.onData = onData;
 						this.kernelArgs = [input, runJob, jobIdx, next];
 						this.onHeader(this.header, ...this.kernelArgs);
-						if (this.blocks.length > 0) {
-							this.blocks.forEach(b => this.onData(b, ...this.kernelArgs));
-						}
 					} else {
 						this.started = false;
 					}
@@ -187,60 +187,64 @@ class Cluster {
 				socket.lastMessageTime = performance.now();
 				socket.onmessage = function (ev) {
 					this.lastMessageTime = performance.now();
-					if (ev.data === 'READY.') {
-						// Connection init
-						// Send kernel
-						var blob = new Blob([JSON.stringify(this.programArgs), '\n', bin]);
-						var fr = new FileReader();
-						fr.onload = () => {
-							this.send(fr.result);
-						};
-						fr.readAsArrayBuffer(blob);
-					} else if (!this.gotHeader) {
-						// Got kernel process header frame
-						this.gotHeader = true;
-						this.header = JSON.parse(ev.data);
-						console.log("header", this.header);
-						resolve(this);
+					if (!this.gotHeader) {
+						if (ev.data === 'READY.') {
+							// Connection init
+							// Send kernel
+							var blob = new Blob([JSON.stringify(this.programArgs), '\n', bin]);
+							var fr = new FileReader();
+							fr.onload = () => {
+								this.send(fr.result);
+							};
+							fr.readAsArrayBuffer(blob);
+						} else {
+							// Got kernel process header frame
+							this.gotHeader = true;
+							this.header = JSON.parse(ev.data);
+							console.log("header", this.header);
+							resolve(this);
+						}
 					} else {
 						this.addBlock(ev.data);
 					}
 				};
 
-				socket.addBlock = function(block) {
+				socket.addBlock = function (block) {
 					if (!this.started) {
 						this.started = true;
 						this.processQueue();
 					}
 					this.receivedBytes += block.byteLength;
-					// console.log(receivedBytes);
 					if (this.receivedBytes >= this.programArgs.outputLength) {
 						var offset = block.byteLength - (this.receivedBytes - this.programArgs.outputLength);
-						var lastSlice = block.slice(0, offset);
-						this.onData(lastSlice, ...this.kernelArgs);
-						this.blocks.push(lastSlice);
-						// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
-						var ab = this.blocks[0];
-						if (this.blocks.length > 1) {
-							ab = Cluster.concatArrayBuffers(this.blocks);
+						if (this.onData) {
+							var lastSlice = block.slice(0, offset);
+							this.onData(lastSlice, ...this.kernelArgs);
+						}
+						var ab = null;
+						if (this.onBody) {
+							this.u8.set(new Uint8Array(lastSlice), this.receivedBytes - block.byteLength);
+							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
+							ab = this.u8.buffer;
 						}
 						this.handleResult(ab, offset, block)
 					} else {
-						this.onData(block, ...this.kernelArgs);
-						this.blocks.push(block);
+						if (this.onData) {
+							this.onData(block, ...this.kernelArgs);
+						}
+						if (this.onBody) {
+							this.u8.set(new Uint8Array(block), this.receivedBytes - block.byteLength)
+						}
 					}
 				};
 
-				socket.handleResult = function(result, offset, block) {
-					result.header = this.header;
+				socket.handleResult = function (result, offset, block) {
 					if (this.onBody) {
+						result.header = this.header;
 						this.onBody(result, ...this.kernelArgs);
-					} else {
-						this.result = result;
 					}
 					this.onHeader = this.onBody = this.onData = null;
-					this.blocks = [];
-					this.receivedBytes -= this.programArgs.outputLength;
+					this.receivedBytes = 0;
 					this.started = false;
 					if (offset < block.length) {
 						var firstSlice = block.slice(offset);
@@ -250,20 +254,6 @@ class Cluster {
 			});
 		}
 		return node.sockets[program.hash];
-	}
-
-	static concatArrayBuffers(blocks) {
-		let totalLength = 0;
-		for (let i = 0; i < blocks.length; i++) {
-			totalLength += blocks[i].byteLength;
-		}
-		let u8 = new Uint8Array(totalLength);
-		for (let i = 0, offset = 0; i < blocks.length; i++) {
-			u8.set(new Uint8Array(blocks[i]), offset, blocks[i].byteLength);
-			offset += blocks[i].byteLength;
-		}
-		console.log(totalLength, u8.length, u8.buffer.byteLength);
-		return u8.buffer;
 	}
 
 	static parse(nodeString) {

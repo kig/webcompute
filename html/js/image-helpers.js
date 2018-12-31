@@ -22,12 +22,27 @@ var ppmToCanvas = function (u8, canvas) {
 
 var rawGrayUint8ToCanvas = function (u8, width, height, canvas) {
     canvas = canvas || document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    var ctx = canvas.getContext('2d');
-    var id = ctx.getImageData(0, 0, width, height);
-    for (var i = 0, j = 0; i < u8.length; i++ , j += 4) {
-        id.data[j] = id.data[j + 1] = id.data[j + 2] = u8[i]; id.data[j + 3] = 255;
+    var d, id, i, j;
+    if (!canvas.ctx) {
+        canvas.ctx = canvas.getContext('2d');
+    }
+    var ctx = canvas.ctx;
+    if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        canvas.imageData = null;
+    }
+    if (!canvas.imageData) {
+        canvas.imageData = ctx.getImageData(0, 0, width, height);
+        d = canvas.imageData.data;
+        for (j = 3; j < d.length; j += 4) {
+            d[j] = 255;
+        }
+    }
+    id = canvas.imageData;
+    d = id.data;
+    for (i = 0, j = 0; i < u8.length; i++, j += 4) {
+        d[j] = d[j + 1] = d[j + 2] = u8[i];
     }
     ctx.putImageData(id, 0, 0);
     return canvas;
@@ -35,14 +50,14 @@ var rawGrayUint8ToCanvas = function (u8, width, height, canvas) {
 
 var rawRGBAUint8ToCanvas = function (u8, width, height, canvas) {
     canvas = canvas || document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
     var ctx = canvas.getContext('2d');
-    var id = ctx.getImageData(0, 0, width, height);
-    for (var i = 0; i < id.data.length; i++) {
-        id.data[i] = u8[i];
+    if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        canvas.imageData = ctx.getImageData(0, 0, width, height);
     }
-    ctx.putImageData(id, 0, 0);
+    canvas.imageData.data.set(u8);
+    ctx.putImageData(canvas.imageData, 0, 0);
     return canvas;
 };
 

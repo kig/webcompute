@@ -231,26 +231,6 @@ function getStatus() {
 const processes = {};
 const processesByName = {};
 
-function sendResult(res, result) {
-    try {
-        if (ArrayBuffer.isView(result)) {
-            res.write(Buffer.from(result.buffer, result.byteOffset, result.byteLength));
-        } else if (result instanceof ArrayBuffer) {
-            res.write(Buffer.from(result));
-        } else if (typeof result === 'string') {
-            res.write(result);
-        } else {
-            var json = JSON.stringify(result);
-            if (json === undefined) {
-                json = 'undefined';
-            }
-            res.write(json);
-        }
-    } catch (err) {
-        res.write(err.stack.toString());
-    }
-}
-
 
 const buildSPV = function (target, program, programInputObj) {
 
