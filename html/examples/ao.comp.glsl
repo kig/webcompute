@@ -1,9 +1,9 @@
-// OutputSize 2073600
-// Workgroups 30 270 1
-// Inputs 1920 1080 0...1920:1920 0...1080:1080 4 0...30
-// OutputType uint8gray 1920 1080
+// OutputSize 518400
+// Workgroups 15 135 1
+// Inputs 1920 1080 0...1920:960 0...1080:540 4 0...30
+// OutputType uint8gray 960 540
 // Animated true
-// Tiles 1 1
+// Tiles 2 2
 
 #version 450
 
