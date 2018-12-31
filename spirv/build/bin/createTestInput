@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-const [outputSize, vulkanDevice, wx, wy, wz, inputSize, ...input] = process.argv.slice(2);
+const fs = require('fs');
+
+var [outputSize, vulkanDevice, wx, wy, wz, inputSize, ...input] = process.argv.slice(2);
 
 var u32 = new Uint32Array(6);
 u32[0] = parseInt(outputSize);
@@ -9,6 +11,8 @@ u32[2] = parseInt(wx);
 u32[3] = parseInt(wy);
 u32[4] = parseInt(wz);
 u32[5] = parseInt(inputSize);
+
+input = input.concat(fs.readFileSync('/dev/stdin').toString().split(/\s+/mg)).filter(s => !(/^\s*$/m.test(s)));
 
 var f32 = new Float32Array(input.map(parseFloat));
 
