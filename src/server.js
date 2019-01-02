@@ -108,14 +108,14 @@ var getVulkanDevices = function (nodeInfo) {
             ? execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`)
             : execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`)
         ).toString();
-        var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l));
+        var gpus = infoString.split("\n").filter(l => /^\s*deviceName\s+=/.test(l) && !/Ivybridge/.test(l));
         var uuids = {};
         var uniqGPUs = [];
         gpus.forEach((gpu, index) => {
             var info = JSON.parse((nodeInfo.platform === 'windows'
                 ? execFileSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch}`, [`--json=${index}`])
-                : execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index}`)
-            ).toString());
+                : execSync(`${VulkanExtras}./spirv/vulkaninfo-${nodeInfo.platform}-${nodeInfo.arch} --json=${index} | grep -v WARNING`)
+            ).toString().replace("'DISPLAY' environment variable not set... skipping surface info", ''));
             var uuid = info.VkPhysicalDeviceProperties.pipelineCacheUUID.map(i => i.toString(16).padStart(2, "0")).join("");
             if (!uuids[uuid]) {
                 uuids[uuid] = true;

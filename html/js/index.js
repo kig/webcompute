@@ -31,6 +31,7 @@ function send() {
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
+		animated: outputAnimated,
 		onResponse: this.vmlanguage.value === 'glsl'
 			? [
 				(header, input, runJob, jobIdx, next) => {
