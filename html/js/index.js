@@ -1,7 +1,7 @@
 
 function send() {
 	window.event.preventDefault();
-	output.textContent = '';
+	document.getElementById('output').textContent = '';
 	var outputType = this.vmoutputtype.value;
 	var outputWidth = parseInt(this.vmoutputwidth.value);
 	var outputHeight = parseInt(this.vmoutputheight.value);
@@ -20,8 +20,6 @@ function send() {
 		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/).test(line))
 		.join("\n");
 
-	var lastFrame = performance.now();
-
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -31,40 +29,38 @@ function send() {
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
-		animated: outputAnimated,
 		onResponse: this.vmlanguage.value === 'glsl'
 			? [
-				(header, input, runJob, jobIdx, next) => {
-					//if (!outputAnimated) {
-					//	output.textContent = JSON.stringify(header);
-					//}
-				}, (data, input, runJob, jobIdx, next) => {
+				(header, input, runJob, jobIdx, next, node, x) => {
+					if (!outputAnimated) {
+						input.output = document.createElement('span');
+						document.getElementById('output').append(input.output);
+						input.output.textContent = JSON.stringify(header);
+					}
+				}, (data, input, runJob, jobIdx, next, node, header) => {
 					if (data.byteLength > 0) {
+						if (!header.loggedTime) {
+							var t = Date.now();
+							var elapsed = t - header.startTime;
+							console.log(header.node, elapsed);
+							header.loggedTime = true;
+						}
 						next();
 					}
-				}, (arrayBuffer, input, runJob, jobIdx, next) => {
-					var t = performance.now();
-					var elapsed = t - lastFrame;
-					lastFrame = t;
-					console.log(elapsed);
+				}, (arrayBuffer, input, runJob, jobIdx, next, node, header) => {
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
 					var tileIdx = jobIdx - (frame * tileCount);
 					var y = Math.floor(tileIdx / outputTilesX);
 					var x = tileIdx - (y * outputTilesX);
-					var output = null;
-					if (!outputAnimated) {
-						output = document.createElement('span');
-						document.getElementById('output').append(output);
-					}
 					if (arrayBuffer.header.type === 'error') {
 						if (!outputAnimated) {
-							output.remove();
+							input.output.remove();
 						}
 						runJob(input);
 					} else {
-						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+						processResponse(arrayBuffer, input.output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 					}
 				}
 			]

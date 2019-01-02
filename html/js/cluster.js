@@ -117,9 +117,6 @@ class Cluster {
 					const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
 					socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
 					socket.send(new Float32Array(jobInput).buffer);
-					if (node.vulkanDeviceIndex !== undefined) {
-						next();
-					}
 				} else {
 					let jobIdx = jobIndex;
 					// do a normal HTTP request
@@ -178,7 +175,7 @@ class Cluster {
 						this.onHeader = onHeader;
 						this.onBody = onBody;
 						this.onData = onData;
-						this.kernelArgs = [input, runJob, jobIdx, next];
+						this.kernelArgs = [input, runJob, jobIdx, next, node, this.header];
 						this.onHeader(this.header, ...this.kernelArgs);
 					} else {
 						this.started = false;
@@ -201,6 +198,7 @@ class Cluster {
 							// Got kernel process header frame
 							this.gotHeader = true;
 							this.header = JSON.parse(ev.data);
+							this.header.node = `${node.url} [${node.vulkanDeviceIndex === undefined ? 'CPU' : node.info.vulkanDevices[node.vulkanDeviceIndex].VkPhysicalDeviceProperties.deviceName}]`;
 							console.log("header", this.header);
 							resolve(this);
 						}

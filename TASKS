@@ -1,5 +1,6 @@
 NEXT STEPS
-
+    - Frame sync
+    - Interactive AOBench
 
 TASKS
     [] Interactive render
@@ -25,23 +26,13 @@ TASKS
                 [] float16 not supported on ISPC
                 [] float64/int64 not supported on mobiles
         [] Latency minimization
-            [] Pipeline all requests
+            [x] Pipeline all requests at the beginning
             [] Pipeline multiple requests to maximize throughput (& minimize avg req latency)
                 - If a node takes 5 ms for 1 work unit and 15 ms for 11 work units, work unit cost is 1 ms, pipeline wait 4 ms => enqueue 12 work units to hit 16 ms latency target (12 * 1 + 4 = 16)
                 - If a node takes 5 ms for 1 work unit and 45 ms for 11 work units, work unit cost is 4 ms, pipeline wait 1 ms => enqueue 3 work units to hit 16 ms latency target (3 * 4 + 1 = 13)
                 [] Time work unit runtime
                 [] Measure work unit cost & scaling
             [] Async I/O to overlap fwrite and kernel execution
-
-    [x] Windows port
-        [x] Run on the Dell laptop /w Win10
-        [] Run on the i7-3770k
-
-    [x] Termux port
-        [x] Run on Nokia 8
-        [x] Run on Note 5
-        [x] Run on Tab S3
-        [x] Run on Huawei Mate 20
 
     [] ARM Linux ports
         [] Run on webcam
@@ -57,6 +48,37 @@ TASKS
             [x] Keep latest shader pipeline + buffer alloc cached
             [x] Receive new inputs via socket
             [] Receive varying input & output lengths
+
+    [] Adaptive job size (jobSize = jobThroughput * (latencyDeadline - jobStartOverhead))
+        - jobThroughput = jobSize / (computeTime + transferTime - jobStartOverhead)
+        - e.g. If you're rendering a 10 MB 1080p frame and it takes a node 11 ms to render the frame 
+                and 90 ms to transfer it, and there's a 1 ms overhead to starting a new job:
+                jobThroughput = 10 MB / (0.011s + 0.09s - 0.001s) = 10 MB / 0.1 s = 100 MB/s
+                If you want to render at 60Hz, your latencyDeadline is around 11 ms. Then the
+                best job size for the node would be:
+                jobSize = 100 MB/s * (11 ms - 1 ms) = 100 MB/s * 0.01s = 1 MB
+        - e.g. Suppose you JPEG compress the frames that you send out at 1:20 compression ratio,
+                and the compression takes 5 ms. Add 5 ms to compute time, divide transfer time by 20:
+                jobThroughput = 10 MB / (0.016s + 0.0045s - 0.001s) = 10 MB / 0.02s = 500 MB/s
+                Now the best job size for the node would be:
+                jobSize = 500 MB/s * (11 ms - 1 ms) = 5 MB
+        [] Measure node
+            [] Job throughput for kernel
+            [] Job overhead
+        [] Compression transfer filter
+        [] Adapt workgroup size to match throughput
+            [] Calculate workgroup size for output size
+            [] Split frame into tiles to match output sizes
+
+    [x] Windows port
+        [x] Run on the Dell laptop /w Win10
+        [x] Run on the i7-3770k
+
+    [x] Termux port
+        [x] Run on Nokia 8
+        [x] Run on Note 5
+        [x] Run on Tab S3
+        [x] Run on Mate 20
 
     [x] GLSL Compute Shader runner
         [x] Compile GLSL shader to SPIRV
