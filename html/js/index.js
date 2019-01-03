@@ -1,7 +1,7 @@
 
 function send() {
 	window.event.preventDefault();
-	document.getElementById('output').textContent = '';
+	output.textContent = '';
 	var outputType = this.vmoutputtype.value;
 	var outputWidth = parseInt(this.vmoutputwidth.value);
 	var outputHeight = parseInt(this.vmoutputheight.value);
@@ -20,6 +20,12 @@ function send() {
 		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/).test(line))
 		.join("\n");
 
+	// var lastFrame = performance.now();
+	var frameTileCounts = [];
+	var currentFrame = 0;
+	var waitForFrame = [];
+	var frameResolvers = [];
+
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -31,36 +37,57 @@ function send() {
 		useHTTP: false,
 		onResponse: this.vmlanguage.value === 'glsl'
 			? [
-				(header, input, runJob, jobIdx, next, node, x) => {
-					if (!outputAnimated) {
-						input.output = document.createElement('span');
-						document.getElementById('output').append(input.output);
-						input.output.textContent = JSON.stringify(header);
+				(header, input, runJob, jobIdx, next) => {
+					var tileCount = (outputTilesX * outputTilesY);
+					var frame = Math.floor(jobIdx / tileCount);
+					if (!frameTileCounts[frame]) {
+						frameTileCounts[frame] = 0;
+						waitForFrame[frame] = new Promise((resolve, reject) => {
+							frameResolvers[frame] = resolve;
+						});
 					}
-				}, (data, input, runJob, jobIdx, next, node, header) => {
+					//if (!outputAnimated) {
+					//	output.textContent = JSON.stringify(header);
+					//}
+				}, (data, input, runJob, jobIdx, next) => {
 					if (data.byteLength > 0) {
-						if (!header.loggedTime) {
-							var t = Date.now();
-							var elapsed = t - header.startTime;
-							console.log(header.node, elapsed);
-							header.loggedTime = true;
-						}
 						next();
 					}
-				}, (arrayBuffer, input, runJob, jobIdx, next, node, header) => {
+				}, async (arrayBuffer, input, runJob, jobIdx, next) => {
+					// var t = performance.now();
+					// var elapsed = t - lastFrame;
+					// lastFrame = t;
+					// console.log(elapsed);
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
+					frameTileCounts[frame]++;
+					if (frame !== currentFrame) {
+						var header = arrayBuffer.header;
+						arrayBuffer = arrayBuffer.slice(0);
+						arrayBuffer.header = header;
+						await waitForFrame[frame];
+					}
 					var tileIdx = jobIdx - (frame * tileCount);
 					var y = Math.floor(tileIdx / outputTilesX);
 					var x = tileIdx - (y * outputTilesX);
+					var output = null;
+					if (!outputAnimated) {
+						output = document.createElement('span');
+						document.getElementById('output').append(output);
+					}
 					if (arrayBuffer.header.type === 'error') {
 						if (!outputAnimated) {
-							input.output.remove();
+							output.remove();
 						}
 						runJob(input);
 					} else {
-						processResponse(arrayBuffer, input.output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+					}
+
+					if (frameTileCounts[frame] === tileCount) {
+						currentFrame = Math.max(currentFrame, frame + 1);
+						frameResolvers[frame]();
 					}
 				}
 			]
@@ -103,7 +130,7 @@ function send() {
 }
 
 
-function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
+async function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	const resultHeader = arrayBuffer.header;
 	var targetCanvas = outputAnimated && document.querySelector('#output canvas');
 	if (resultHeader.type === 'image/ppm' || outputType === 'ppm') {
