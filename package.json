@@ -6,6 +6,7 @@
     "express": "^4.16.4",
     "express-session": "^1.15.6",
     "forever": "^0.15.3",
+    "mmap.js": "^1.0.3",
     "monaco-editor": "^0.14.3",
     "request": "^2.88.0",
     "ws": "^6.1.2"
