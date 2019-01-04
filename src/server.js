@@ -688,7 +688,7 @@ app.post('/new/:name?', (req, res) =>
 wss.on('connection', runSPIRVSocket);
 
 app.post('/build/:name?', (req, res) =>
-    bodyAsBuffer(req, buffer => runVM('./build-instance', 'build-' + req.params.name, buffer, res))
+    bodyAsBuffer(req, buffer => runVM('./src/build-instance', 'build-' + req.params.name, buffer, res))
 );
 
 app.get('/list', (req, res) => {
