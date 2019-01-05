@@ -7,12 +7,12 @@ const buf = mmap.alloc(4096 + size, mmap.PROT_READ | mmap.PROT_WRITE, mmap.MAP_S
 
 const slices = [];
 for (var i=0 ; i < 16; i++) {
-    slices.push(buf.slice(4096 + i * 2e5, 4096 + (i+1) * 2e5));
+    slices.push(new Uint8Array(buf.buffer, 4096 + i * 2e5, 2e5));
 }
 
 const dst = Buffer.alloc(size);
 
-for (var j = 0; j < 1e5; j++) {
+for (var j = 0; j < 1e4; j++) {
     for (var i = 0; i < 16; i++) {
         while (buf[i] === 1) {
         }
@@ -23,3 +23,13 @@ for (var j = 0; j < 1e5; j++) {
 
 fs.ftruncateSync(fd, 0);
 fs.closeSync(fd);
+
+for (var i = 0; i < 16; i++) {
+    for (var j=0; j < 2e5; j++) {
+        if (dst[i*2e5 + j] !== i) {
+            console.log("mismatch at", i*2e5 + j, ":", dst[i*2e5 + j], "!==", i);
+            process.exit();
+        }
+    }
+}
+console.log("All a-ok!");
