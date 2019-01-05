@@ -54,7 +54,7 @@ ispc-cross:
 ispc:
 	cp runner.ispc targets/$(TARGET)/runner.ispc
 	cp spirvcross_stdlib.ispc targets/$(TARGET)/spirvcross_stdlib.ispc
-	../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o
+	/bin/bash -c "../../ispc/ispc-$(ARCH)-$(MY_PLATFORM)-$(MY_ARCH) $(FLAGS) -O2 targets/$(TARGET)/runner.ispc -o targets/$(TARGET)/program.o 2> >(ruby -e 'STDIN.read.split(/^.*spirvcross_stdlib.ispc/, 2)[0].display')"
 
 ifeq ($(PLATFORM),windows)
 runner:
