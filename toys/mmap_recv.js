@@ -7,7 +7,7 @@ const buf = mmap.alloc(4096 + size, mmap.PROT_READ | mmap.PROT_WRITE, mmap.MAP_S
 
 const slices = [];
 for (var i=0 ; i < 16; i++) {
-    slices.push(buf.slice(4096 + i * 2e5));
+    slices.push(buf.slice(4096 + i * 2e5, 4096 + (i+1) * 2e5));
 }
 
 const dst = Buffer.alloc(size);
@@ -16,7 +16,7 @@ for (var j = 0; j < 1e5; j++) {
     for (var i = 0; i < 16; i++) {
         while (buf[i] === 1) {
         }
-        dst.set(slices[i], i * 2e5)
+        dst.set(slices[i], i * 2e5);
         buf[i] = 1;
     }
 }
