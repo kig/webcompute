@@ -1,8 +1,8 @@
 const ws = new WebSocket('ws://127.0.0.1:8080', );
 ws.binaryType = 'arraybuffer';
 
-const msgSize = 2048*2048;
-const threads = 4;
+const msgSize = 2048*64;
+const threads = 16;
 const size = threads * msgSize;
 
 var msgCount = 0;
@@ -10,13 +10,14 @@ var totalMsgSize = 0;
 var startTime;
 var endTime;
 
-var log = { textContent: '' };
+const log = { textContent: '' };
 
 ws.onclose = () => {
     endTime = performance.now();
-    var elapsed = endTime - startTime;
+    const elapsed = endTime - startTime;
+    const bw = totalMsgSize / (elapsed / 1e3);
     log.textContent += `Done in ${elapsed} ms\n`;
-    log.textContent += `Bandwidth ${totalMsgSize / elapsed / 1e6} GB/s\n`;
+    log.textContent += `Bandwidth ${Math.round(bw / 1e6) / 1000} GB/s (${Math.floor(bw / (1920*1080*3))} fps @ 1080p, ${Math.floor(bw / (3840*2160*3))} fps @ 4k)\n`;
     log.textContent += [`All a-ok! Received ${msgCount} messages, totaling ${totalMsgSize} bytes`].join(" ") + "\n";
     postMessage({message: log.textContent});
 };
@@ -27,8 +28,8 @@ ws.onmessage = (ev) => {
     msgCount++;
     totalMsgSize += ev.data.byteLength;
     var msg = new Uint8Array(ev.data);
-    postMessage({message: `Received ${msgCount}\n`, buffer: msg}, [msg.buffer]);
     if (msgCount % threads === 0) {
+        postMessage({message: `Received ${msgCount}\n`, buffer: msg}, [msg.buffer]);
         ws.send(ok);
     }
 };

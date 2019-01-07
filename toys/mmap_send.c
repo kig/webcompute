@@ -8,8 +8,8 @@
 #include <string.h>
 
 int main() {
-	int threads = 4;
-	int msg_size = 2048*2048;
+	int threads = 16;
+	int msg_size = 2048*64;
 	size_t size = threads * msg_size;
 	int fd = open("/tmp/testmmap", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	ftruncate(fd, size + 4096);
@@ -24,7 +24,7 @@ int main() {
 	#pragma omp parallel for
 	for (size_t i = 0; i < threads; i++) {
 		size_t off = i * size/threads;
-		for (int j = 0; j < 1e2; j++) {
+		for (int j = 0; j < 1e3; j++) {
 			memset(src+off, (char)i, size/threads);
 			while (buf[i] == 0) {
 			}
