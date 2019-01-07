@@ -8,8 +8,8 @@
 #include <string.h>
 
 int main() {
-	int threads = 16;
-	size_t size = threads * 2e5;
+	int threads = 4;
+	size_t size = threads * 2048*2048;
 	int fd = open("/tmp/testmmap", O_RDWR);
 	volatile char *buf = (char*)mmap(NULL, 4096 + size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	char *dst = (char*)malloc(size);
@@ -21,7 +21,7 @@ int main() {
 		size_t off = i * size/threads;
 		size_t k = 0;
 		size_t res = 0;
-		for (int j = 0; j < 1e5; j++) {
+		for (int j = 0; j < 1e2; j++) {
 			while (buf[i] == 1) {
 				k = (k + 1) % (size / threads);
 				res ^= dst[off+k] ^ j;

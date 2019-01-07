@@ -4,15 +4,16 @@ const ws = new WebSocket('ws://localhost:8080', {
     perMessageDeflate: false
 });
 
-const msgSize = 1e5;
-const size = 16 * msgSize;
+const threads = 4;
+const msgSize = 2048*2048;
+const size = threads * msgSize;
 
 const dst = Buffer.alloc(size);
 var msgCount = 0;
 var totalMsgSize = 0;
 
 ws.on('close', () => {
-    for (var i = 0; i < 16; i++) {
+    for (var i = 0; i < threads; i++) {
         for (var j=0; j < msgSize; j++) {
             if (dst[i*msgSize + j] !== i) {
                 console.log("mismatch at", i*msgSize + j, ":", dst[i*msgSize + j], "!==", i);
@@ -30,11 +31,11 @@ ws.on('message', (msg) => {
     totalMsgSize += msg.byteLength;
     var i = msg[0];
     dst.set(msg, i * msgSize);
-    if (msgCount % 160000 === 0) {
+    if (msgCount % threads === 0) {
         ws.send(ok);
     }
 });
 
 ws.on('open', () => {
-    // ws.send(ok);
+    ws.send(ok);
 });

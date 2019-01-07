@@ -8,13 +8,14 @@ const wss = new WebSocket.Server({
 const mmap = require('mmap.js');
 const fs = require('fs');
 
-const msgSize = 1e5;
-const size = 16 * msgSize;
+const msgSize = 2048*2048;
+const threads = 4;
+const size = threads * msgSize;
 const fd = fs.openSync("/tmp/testmmap", 'r+');
 const buf = mmap.alloc(4096 + size, mmap.PROT_READ | mmap.PROT_WRITE, mmap.MAP_SHARED, fd, 0);
 
 const slices = [];
-for (var i=0 ; i < 16; i++) {
+for (var i=0 ; i < threads; i++) {
     slices.push(new Uint8Array(buf.buffer, 4096 + i * msgSize, msgSize));
 }
 
@@ -26,8 +27,8 @@ const dataSlice = buf.slice(4096);
 wss.on('connection', (ws) => {
     var msgCount = 0, msgSize = 0;
 
-    for (var j = 0; j < 1e4; j++) {
-        for (var i = 0; i < 16; i++) {
+    var sendBuffer = () => {
+        for (var i = 0; i < threads; i++) {
             while (buf[i] === 1) {
             }
             ws.send(slices[i]);
@@ -37,13 +38,19 @@ wss.on('connection', (ws) => {
         }
     }
 
+    var j = 0;
     ws.on('message', () => {
-        console.log("Sent %d messages, totaling %d bytes", msgCount, msgSize);
+        if (j < 1e2) {
+            sendBuffer();
+            j++;
+        } else {
+            console.log("Sent %d messages, totaling %d bytes", msgCount, msgSize);
 
-        fs.ftruncateSync(fd, 0);
-        fs.closeSync(fd);
-        ws.close();
-        wss.close();
+            fs.ftruncateSync(fd, 0);
+            fs.closeSync(fd);
+            ws.close();
+            wss.close();
+        }
     });
 
 
