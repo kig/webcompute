@@ -1,3 +1,62 @@
+/*
+	How _should_ this work?
+
+	Interactive rendering:
+		- set a latency limit X ms
+		- measure kernel overhead & avg pipelined throughput for each node
+		- calculate a tile distribution that achieves minimum runtime
+		- update current state
+		- send out tile pipelines for current frame
+		- receive the tiles and write them to the frame surface
+		- loop back to state update
+
+	Low-latency rendering with compression:
+		- Use libjpeg-turbo to compress tiles on server
+		- createObjectURL(blob) => img.src => ctx.drawImage
+
+	Low-latency rendering without compression:
+		- Render image on the server to render buffer
+		- Swap render buffer and read buffer
+		- Start rendering next image
+		- Read image from render buffer in 100k chunks to mmapped shared buffer
+		[x] - Send mmap buffer over WebSocket to client
+		[x] - Client does gl.texSubImage2D(ev.data) to copy received buffer to the GPU
+	
+	Compute networks:
+		- Set up the data flow of the network
+			--- This might not be a super useful taxonomy.
+				Is there a perf/understandability/maintenance benefit to these restrictions?
+				I mean, you could implement all of these using Transform nodes.
+			- Fan 1:N (e.g. rasterizer)
+			- Map 1:1 (e.g. vertex shader, fragment shader)
+			- Reduce N:1 (e.g. fragment blend)
+			- Filter N:m, m <= N (e.g. early depth test)
+			- Expand m:N, N >= m (e.g. geometry shader)
+			- Transform N:M, might be smaller, might be larger (e.g. task shader)
+
+		- Writing compute networks that aggregate memory bandwidth
+			=> Keep data in fastest memory possible
+				- Registers, L1$, L2$, GPU memory, L3$, ..., DRAM
+			=> Split kernels into compute-heavy tiles -- Array fusion
+				- Instead of 1024x1024 (x) 1024x1024 (x) 1024x1024 = 1024x1024
+							 1024x1024.tile(32,32){ 32x32 (x) 32x32 (x) 32x32) }.combine() = 1024x1024
+
+	Auto-splitting workgroups:
+		- Split frame along workgroups, adjust workgroup ids at worker
+		- E.g. 1920 x 1080 frame rendered using 192 x 108 workgroups
+		=>  RTX 2070 runs 192 x 70 wgs
+			GTX 1050:     192 x 14 wgs
+			iGPU:         192 x 6 wgs
+			iGPU2:        192 x 5 wgs
+			Mali G76:     192 x 4 wgs
+			Adreno 540:   192 x 4 wgs
+			TR2950X:      192 x 2 wgs
+			Xeon-16c:     192 x 2 wgs
+			i7-3770:      64 x 1 wgs
+			i7-3770k:     64 x 1 wgs
+			i7-8259U:     64 x 1 wgs
+*/
+
 
 function send() {
 	window.event.preventDefault();
