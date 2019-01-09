@@ -8,3 +8,8 @@ spirv/.DS_Store
 yarn-error.log
 toys/mmap_recv
 toys/mmap_send
+toys/ptrace_kill
+toys/ptrace_remove
+toys/test_remove
+spirv/build/input
+ispc/build/input
