@@ -1,9 +1,10 @@
-// OutputSize 20736
-// Workgroups 3 27 1
-// Inputs 1920 1080 0...1920:192 0...1080:108 1 0...20
-// OutputType uint8gray 192 108
+// OutputSize 8294400
+// Workgroups 30 270 1
+// Inputs 1920 1080 0...1920:1920 0...1080:1080 1 0...200
+// OutputType uint8rgba 1920 1080
 // Animated true
-// Tiles 10 10
+// Tiles 1 1
+// GPUOnly true
 
 #version 450
 
@@ -181,7 +182,7 @@ float computeAO(inout Intersection isect)
 			// Pick a random ray direction with importance sampling.
 			// p = cos(theta) / 3.141592
 			float r = randomn(); //hash2(isect.p.xy+vec2(i,j));
-			float phi = 2.0 * 3.141592 * hash2(isect.p.xy+vec2(float(i)*9.1,float(j)*9.1));
+			float phi = 2.0 * 3.141592 * randomn(); //hash2(isect.p.xy+vec2(float(i)*9.1,float(j)*9.1));
 
 			vec3 ref;
 			float s, c;
@@ -263,8 +264,6 @@ void main()
     }
 	uint tileWidth = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
 	uint pxoff = uint(tileWidth * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x);
-	uint px4off = pxoff / 4;
-	uint byteIdx = pxoff - px4off * 4;
-	atomicAnd(imageData[px4off], ~(uint(255) << (8 * byteIdx)));
-    atomicOr(imageData[px4off], uint(255.0 * fragColor / (subSamples * subSamples)) << (8 * byteIdx));
+	uint v = uint(255.0 * fragColor / (subSamples * subSamples));
+    imageData[pxoff] = (0xff << 24) | (v << 16) | (v << 8) | v;
 }

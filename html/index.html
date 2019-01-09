@@ -14,7 +14,7 @@
 
 	<h3>Create new process</h3>
 	<div id="editorc">
-		<form onsubmit="send()">
+		<form id="vmform">
 			<p><input id="vmname" placeholder="Process Name"></p>
 			<div id="container"></div>
 			<h4>Language</h4>
@@ -29,7 +29,8 @@
 			<p>
 				<input type="hidden" id="vmnodes" placeholder="Addresses of worker nodes (e.g. 192.168.1.19, bigserv, 192.168.1.4)">
 				<div id="vmnodelist"></div>
-				<input id="addnode"><button onclick="addNode()">Add node</button>
+				<input id="addnode"><button id="addnodebutton">Add node</button>
+				<input type="checkbox" id="vmgpuonly"> <label for="vmgpuonly">GPU Only</label>
 			</p>
 			<h4>Input array</h4>
 			<p><input id="vmparams" placeholder="Input param array (e.g. 640,480,4,0..30,{2,4,8},12, Time, TimeDelta, MouseX, MouseY, Buttons, DragDx)"></p>
@@ -68,6 +69,7 @@
 	<script src="monaco-editor/min/vs/loader.js"></script>
 	<script src="js/image-helpers.js"></script>
 	<script src="js/cluster.js"></script>
+	<script src="js/video-screen.js"></script>
 	<script src="js/index.js"></script>
 
 </body>
