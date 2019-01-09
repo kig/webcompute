@@ -24,20 +24,9 @@ ifeq ($(PLATFORM),windows)
   LIBS=
 endif
 
-FOMP=
-OMP=
-
-ifeq ($(ARCH),aarch64)
-	ifeq ($(PLATFORM),android)
-		# Android Termux, use OpenMP since pthreads semaphores are missing
-		FOMP=-fopenmp
-		OMP=-lomp $(FOMP)
-	endif
-endif
-
 ifeq ($(ARCH),arm)
 	# Raspberry Pi settings
-	OMP=-stdlib=libc++ -lunwind -mfloat-abi=hard
+	LINK_FLAGS=-stdlib=libc++ -lunwind -mfloat-abi=hard
 	BITS=32
 endif
 
@@ -73,13 +62,13 @@ ispc-bin:
 else
 runner:
 	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -std=c++11
+	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -std=c++11 $(LINK_FLAGS)
 
 ispc-runner:
-	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11
+	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11 $(LINK_FLAGS)
 
 ispc-bin:
-	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11 $(OMP)
+	clang++ -O2 -m$(BITS) ../../ispc/build/objs/tasksys-$(PLATFORM)-$(ARCH).o targets/$(TARGET)/program.o objs/ispcRunner-$(PLATFORM)-$(ARCH).o -o targets/$(TARGET)/program $(LIBS) -std=c++11 $(LINK_FLAGS)
 endif
 
 all: runner ispc-runner spirv ispc-cross ispc ispc-bin
