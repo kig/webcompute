@@ -1,7 +1,8 @@
 class Cluster {
 
-	constructor(nodes) {
+	constructor(nodes, gpuOnly=false) {
 		this.buildNodes = nodes.filter(n => n.info.canBuild);
+		this.gpuOnly = gpuOnly;
 		this.nodes = nodes;
 		this.availableNodes = {};
 		this.availableNodes.ISPC = nodes.slice();
@@ -11,8 +12,10 @@ class Cluster {
 				var vulkanNode = { ...n, vulkanDeviceIndex: idx, sockets: {} };
 				this.availableNodes.SPIRV.push(vulkanNode);
 			});
-			n.sockets = {};
-			this.availableNodes.SPIRV.push(n);
+			if (!this.gpuOnly) {
+				n.sockets = {};
+				this.availableNodes.SPIRV.push(n);
+			}
 		});
 		this.workQueue = { ISPC: [], SPIRV: [] };
 	}
@@ -96,10 +99,11 @@ class Cluster {
 			outputLength,
 			onResponse,
 			workgroups,
-			useHTTP
+			useHTTP,
+			gpuOnly
 		} = options;
 		var green = '';
-		var cluster = this.parse(nodes);
+		var cluster = this.parse(nodes, gpuOnly);
 		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
 		var runJob = (jobInput, jobIndex) => {
@@ -254,8 +258,8 @@ class Cluster {
 		return node.sockets[program.hash];
 	}
 
-	static parse(nodeString) {
-		return new Cluster(JSON.parse(nodeString));
+	static parse(nodeString, gpuOnly) {
+		return new Cluster(JSON.parse(nodeString), gpuOnly);
 	}
 
 	static expandParam(param) {

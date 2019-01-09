@@ -58,8 +58,8 @@
 */
 
 
-function send() {
-	window.event.preventDefault();
+function send(event) {
+	event.preventDefault();
 	output.textContent = '';
 	var outputType = this.vmoutputtype.value;
 	var outputWidth = parseInt(this.vmoutputwidth.value);
@@ -67,16 +67,15 @@ function send() {
 	var outputAnimated = this.vmoutputanimated.checked;
 	var outputTilesX = parseInt(this.vmoutputtilesx.value || 1);
 	var outputTilesY = parseInt(this.vmoutputtilesy.value || 1);
+	var gpuOnly = this.vmgpuonly.checked;
 	var workgroups = this.vmworkgroups.value.replace(/\s+/g, '').split(",").map(s => parseInt(s)).slice(0, 3);
 	while (workgroups.size < 3) workgroups.push(1);
 	if (outputAnimated) {
-		const canvas = document.createElement('canvas');
-		canvas.width = outputWidth * outputTilesX;
-		canvas.height = outputHeight * outputTilesY;
-		document.getElementById('output').append(canvas);
+		var videoScreen = new VideoScreen(outputWidth * outputTilesX, outputHeight * outputTilesY, 4);
+		document.getElementById('output').append(videoScreen.canvas);
 	}
 	var source = window.vmsrcEditor.getValue().split("\n")
-		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/).test(line))
+		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly)\s+(.*)/).test(line))
 		.join("\n");
 
 	// var lastFrame = performance.now();
@@ -85,12 +84,16 @@ function send() {
 	var waitForFrame = [];
 	var frameResolvers = [];
 
+	var startTime = performance.now();
+	var totalBytes = 0;
+
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
 		language: this.vmlanguage.value,
 		workgroups: workgroups,
 		source: source,
+		gpuOnly: gpuOnly,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
@@ -117,6 +120,8 @@ function send() {
 					// var elapsed = t - lastFrame;
 					// lastFrame = t;
 					// console.log(elapsed);
+					totalBytes += arrayBuffer.byteLength;
+					console.log((totalBytes/1e9) / ((performance.now() - startTime)/1000), 'GB/s');
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
@@ -141,11 +146,12 @@ function send() {
 						}
 						runJob(input);
 					} else {
-						processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+						processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 					}
 
 					if (frameTileCounts[frame] === tileCount) {
 						currentFrame = Math.max(currentFrame, frame + 1);
+						videoScreen.update();
 						frameResolvers[frame]();
 					}
 				}
@@ -189,8 +195,11 @@ function send() {
 }
 
 
-async function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
+async function processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	const resultHeader = arrayBuffer.header;
+	videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
+	return;
+
 	var targetCanvas = outputAnimated && document.querySelector('#output canvas');
 	if (resultHeader.type === 'image/ppm' || outputType === 'ppm') {
 		targetCanvas = ppmToCanvas(new Uint8Array(arrayBuffer), targetCanvas);
@@ -245,7 +254,7 @@ require(['vs/editor/editor.main'], function () {
 			Tiles: []
 		};
 		text.split("\n").forEach(line => {
-			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles)\s+(.*)/);
+			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly)\s+(.*)/);
 			if (m) {
 				var key = m[1];
 				var value = m[2].replace(/^\s+|\s+$/g, '').split(/,| +/).map(s => s.replace(/\s+/g, ''));
@@ -261,6 +270,7 @@ require(['vs/editor/editor.main'], function () {
 		vmoutputanimated.checked = config.Animated[0] === 'true';
 		vmoutputtilesx.value = config.Tiles[0] || '';
 		vmoutputtilesy.value = config.Tiles[1] || '';
+		vmgpuonly.checked = config.GPUOnly[0] === 'true';
 		window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
 			value: text,
 			language: 'c'
@@ -284,9 +294,9 @@ var addNodes = function (nodeList) {
 	}
 }
 
-var addNode = function () {
-	if (window.event) {
-		window.event.preventDefault();
+var addNode = function (event) {
+	if (event) {
+		event.preventDefault();
 	}
 
 	var host = window.addnode.value;
@@ -313,3 +323,6 @@ output.onclick = (ev) => {
 		ev.target.requestFullscreen();
 	}
 };
+
+window.vmform.onsubmit = send;
+window.addnodebutton.onclick = addNode;
