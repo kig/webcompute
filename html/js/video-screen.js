@@ -92,6 +92,7 @@ class VideoScreen {
         this.height = height;
         this.canvas.width = width;
         this.canvas.height = height;
+        this.canvas.update = () => this.update(true);
         var glc = this.canvas;
         var gl = this.gl = this.canvas.getContext('webgl2', {preserveDrawingBuffer: true, alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: true});
         gl.clearColor(0,0,0,1);
@@ -146,8 +147,8 @@ class VideoScreen {
         }
     }
 
-    update() {
-        if (this.videoChanged) {
+    update(force = false) {
+        if (force || this.videoChanged) {
             var bbox = this.canvas.getBoundingClientRect();
             var dpr = (window.devicePixelRatio || 1);
             if (this.canvas.width !== bbox.width * dpr || this.canvas.height !== bbox.height * dpr) {
@@ -160,6 +161,8 @@ class VideoScreen {
             }
             var gl = this.gl;
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.activeTexture( gl.TEXTURE0 );
+            gl.bindTexture(gl.TEXTURE_2D, this.tex);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
             this.videoFrame++;
             this.videoChanged = false;

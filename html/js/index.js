@@ -1,4 +1,3 @@
-
 function send(event) {
 	event.preventDefault();
 	output.textContent = '';
@@ -43,7 +42,7 @@ function send(event) {
 				(header, input, runJob, jobIdx, next) => {
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
-					if (!frameTileCounts[frame]) {
+					if (frameTileCounts[frame] === undefined) {
 						frameTileCounts[frame] = 0;
 						waitForFrame[frame] = new Promise((resolve, reject) => {
 							frameResolvers[frame] = resolve;
@@ -71,6 +70,7 @@ function send(event) {
 						var header = arrayBuffer.header;
 						arrayBuffer = arrayBuffer.slice(0);
 						arrayBuffer.header = header;
+						// console.log('waiting for', frame, waitForFrame[frame], frameResolvers[frame]);
 						await waitForFrame[frame];
 					}
 					var tileIdx = jobIdx - (frame * tileCount);
@@ -93,7 +93,9 @@ function send(event) {
 					if (frameTileCounts[frame] === tileCount) {
 						currentFrame = Math.max(currentFrame, frame + 1);
 						videoScreen.update();
-						frameResolvers[frame]();
+						// console.log('redraw', frame);
+						// console.log('resolving frame', frame);
+						frameResolvers[currentFrame]();
 					}
 				}
 			]
@@ -139,6 +141,7 @@ function send(event) {
 async function processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	const resultHeader = arrayBuffer.header;
 	videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
+	// console.log('updateTexture', frame);
 	return;
 
 	var targetCanvas = outputAnimated && document.querySelector('#output canvas');
@@ -262,6 +265,11 @@ output.onclick = (ev) => {
 	if (ev.target.tagName === 'CANVAS') {
 		ev.preventDefault();
 		ev.target.requestFullscreen();
+		if (ev.target.update) {
+			window.requestAnimationFrame(() => {
+				ev.target.update();
+			});
+		}
 	}
 };
 
