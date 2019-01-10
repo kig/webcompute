@@ -125,13 +125,44 @@ class ComputeApplication
         createFence();
         mapMemory();
 
-		while (readInput()) {
-    	    writeInput();
+        // Set mmap buffer control page flag to RUNNING
+
+        // There are two (or more) output buffers.
+        // Buffers are mmapped to a shared memory region shared with the WebSocket server for fast IPC.
+        // (No need to copy anything from ps to ps.)
+        // Each buffer can be in either write-mode, done-mode or read-mode.
+        // A write-mode buffer is an empty buffer ready to be used for compute.  [Target buffer]
+        // A done-mode buffer is a full unsynced buffer, ready to be copied from device to host. [Output buffer]
+        // A read-mode buffer is a full synced buffer, ready to be copied to WebSocket. [Output buffer]
+
+        while (readInput()) {
+            writeInput();
+            // Waits for the target buffer to become ready to write
             startCommandBuffer();
-        	waitCommandBuffer();
+            waitCommandBuffer();
+            // Sets the target buffer flag to done
+            // Swaps target buffer and output buffer
+            // swapOutputBuffers();
             readOutput();
-        	writeOutput();
-		}
+            writeOutput();
+        }
+        // while (control[state] == RUNNING) {
+            // Wait for output buffer to become done.
+            // [foreach chunk]
+            //   Invalidate the Vulkan mapping to copy the memory from device to host.
+            //   Set output chunk flag to read.
+            // [/foreach]
+            // [WebSocket server] 
+            //    Wait for output chunk flag to become read.
+            //    Send the output chunk over the WebSocket.
+            //    Set the output chunk flag to write.
+            // [/WebSocket server]
+            // Wait for all output chunks to have write flag set.
+            // Set output buffer flag to write.
+
+        // }
+
+        // Set mmap buffer control page flag to FINISHED
 
         unmapMemory();
         // ... }
