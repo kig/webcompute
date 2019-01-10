@@ -148,16 +148,29 @@ console.log(nodeInfo.platform);
 var VulkanExtras = '';
 if (nodeInfo.platform === 'macos') {
     VulkanExtras = '. ~/.bashrc; ';
-} else if (nodeInfo.platform === 'linux' && execSync(`uname -a`).toString().match(/\bAndroid\b/)) {
+} else if (nodeInfo.platform === 'linux' && execSync(`uname -o`).toString().match(/\bAndroid\b/)) {
     VulkanExtras = "LD_LIBRARY_PATH=/system/lib64:$PREFIX/lib ";
+    nodeInfo.platform = 'android';
 }
 nodeInfo.target = getTarget(nodeInfo);
 nodeInfo.threadCount = getThreadCount(nodeInfo);
 nodeInfo.memorySize = getMemorySize(nodeInfo);
 nodeInfo.cpuMaxFreq = getCPUFreq(nodeInfo);
-nodeInfo.canBuild = nodeInfo.arch === 'x86-64';
+const exeExt = nodeInfo.platform === 'windows' ? '.exe' : '';
+nodeInfo.canBuild = fs.existsSync(`./ispc/ispc-${nodeInfo.arch}-${nodeInfo.platform}-${nodeInfo.arch}${exeExt}`);
 nodeInfo.canCrossCompile = nodeInfo.canBuild && nodeInfo.platform === 'linux';
-nodeInfo.canRunISPC = nodeInfo.arch !== 'windows';
+const testCmd = (cmd) => {
+    try {
+        execSync(cmd, {stdio: [null, null, null]});
+        return true;
+    } catch(e) {
+        console.log(cmd, 'not found');
+        return false;
+    }
+};
+nodeInfo.canBuildSPIRV = fs.existsSync(`./spirv/glslangValidator-${nodeInfo.platform}-${nodeInfo.arch}${exeExt}`);
+nodeInfo.canRunISPC = testCmd('clang++ -v') && testCmd('make -v');
+console.log(nodeInfo);
 nodeInfo.vulkanDevices = getVulkanDevices(nodeInfo);
 
 app.get('/info', (req, res) => {
