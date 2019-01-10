@@ -33,7 +33,7 @@ var getTarget = function (nodeInfo) {
         return 'neon-i32x4';
     }
     if (nodeInfo.arch === 'x86-64') {
-        if (nodeInfo.platform === 'linux') {
+        if (nodeInfo.platform === 'linux' || nodeInfo.platform === 'android') {
             var keys = execSync(`grep -o -E ' mmx\\S* | sse\\S* | avx\\S* ' /proc/cpuinfo | sort -u`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/);
             if (keys.indexOf('avx2') > -1) {
                 return 'avx2-i32x8';
@@ -65,7 +65,7 @@ var getTarget = function (nodeInfo) {
 }
 
 var getThreadCount = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
+    if (nodeInfo.platform === 'linux' || nodeInfo.platform === 'android') {
         return parseInt(execSync(`grep processor /proc/cpuinfo | wc -l`).toString());
     } else if (nodeInfo.platform === 'macos') {
         return parseInt(execSync(`sysctl -a | grep machdep.cpu.thread_count | awk '{ print $2 }'`).toString());
@@ -76,7 +76,7 @@ var getThreadCount = function (nodeInfo) {
 }
 
 var getMemorySize = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
+    if (nodeInfo.platform === 'linux' || nodeInfo.platform === 'android') {
         return parseInt(execSync(`grep MemTotal /proc/meminfo | awk '{ print $2 }'`).toString()) * 1000;
     } else if (nodeInfo.platform === 'macos') {
         return parseInt(execSync(`sysctl -a | grep hw.memsize | awk '{ print $2 }'`).toString());
@@ -87,7 +87,7 @@ var getMemorySize = function (nodeInfo) {
 }
 
 var getCPUFreq = function (nodeInfo) {
-    if (nodeInfo.platform === 'linux') {
+    if (nodeInfo.platform === 'linux' || nodeInfo.platform === 'android') {
         return execSync(`cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq`).toString().replace(/^\s+|\s+$/g, '').split(/\s+/).map(s => parseInt(s));
     } else if (nodeInfo.platform === 'macos') {
         var freq = parseInt(execSync(`sysctl -a | grep hw.cpufrequency_max | awk '{ print $2 }'`).toString());
