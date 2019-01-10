@@ -155,7 +155,9 @@ function send(event) {
 						videoScreen.update();
 						// console.log('redraw', frame);
 						// console.log('resolving frame', frame);
-						frameResolvers[currentFrame]();
+						if (frameResolvers[currentFrame]) {
+							frameResolvers[currentFrame]();
+						}
 					}
 				}
 			]
