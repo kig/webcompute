@@ -1,12 +1,15 @@
 // OutputSize 8294400
 // Workgroups 30 270 1
-// Inputs 1920 1080 0...1920:1920 0...1080:1080 1 0...200
+// Inputs 1920 1080 0...1920:1920 0...1080:1080
 // OutputType uint8rgba 1920 1080
 // Animated true
 // Tiles 1 1
 // GPUOnly true
+// Interactive true
 
 #version 450
+
+const float subSamples = 1.0;
 
 layout (local_size_x = 64, local_size_y = 4, local_size_z = 1 ) in;
 
@@ -14,8 +17,9 @@ layout(std430, binding = 0) readonly buffer inputs
 {
   vec2 iResolution;
   vec2 offset;
-  float subSamples;
-  float frame;
+  vec2 mouse;
+  float iTime;
+  float iFrame;
 };
 
 layout(std430, binding = 1) buffer outputs
@@ -235,7 +239,7 @@ void main()
 
 	sphere[0].center = vec3(-2.0, 0.0, -3.5);
 	sphere[0].radius = 0.5;
-	sphere[1].center = vec3(-0.5, 0.0, -3.0 + sin(frame/10.0));
+	sphere[1].center = vec3(-0.5, 0.0, -3.0 + sin(iFrame/10.0));
 	sphere[1].radius = 0.5;
 	sphere[2].center = vec3(1.0, 0.0, -2.2);
 	sphere[2].radius = 0.5;
@@ -247,7 +251,7 @@ void main()
             vec2 fuv = (uv + (vec2(x, y) * duv / subSamples)) * 2.0 - 1.0;
 			fuv.x *= iResolution.x / iResolution.y;
             
-            ray.org = vec3(0.0);
+            ray.org = vec3(mouse.xy + vec2(0.0, 1.1), 0.0);
             ray.dir = normalize(vec3(fuv, -1.0));
 
             it.hit = 0;

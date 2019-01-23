@@ -137,11 +137,12 @@ class VideoScreen {
         this.stopped = false;
     }
 
-    updateTexture(uint8array, x, y, width, height) {
+    updateTexture(uint8array, x, y, width, height, offset=0) {
         if (!this.stopped) {
             var gl = this.gl;
-            gl.activeTexture( gl.TEXTURE0 );
-            gl.bindTexture(gl.TEXTURE_2D, this.tex);
+            if (offset > 0) {
+                uint8array = new Uint8Array(uint8array.buffer, offset);
+            }
             gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, width, height, this.pixelFormat, gl.UNSIGNED_BYTE, uint8array);
             this.videoChanged = true;
         }

@@ -67,6 +67,7 @@ function send(event) {
 	var outputAnimated = this.vmoutputanimated.checked;
 	var outputTilesX = parseInt(this.vmoutputtilesx.value || 1);
 	var outputTilesY = parseInt(this.vmoutputtilesy.value || 1);
+	var interactive = this.vminteractive.checked;
 	var gpuOnly = this.vmgpuonly.checked;
 	var workgroups = this.vmworkgroups.value.replace(/\s+/g, '').split(",").map(s => parseInt(s)).slice(0, 3);
 	while (workgroups.size < 3) workgroups.push(1);
@@ -75,18 +76,53 @@ function send(event) {
 		document.getElementById('output').append(videoScreen.canvas);
 	}
 	var source = window.vmsrcEditor.getValue().split("\n")
-		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly)\s+(.*)/).test(line))
+		.filter(line => !(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly|Interactive)\s+(.*)/).test(line))
 		.join("\n");
 
 	// var lastFrame = performance.now();
-	var frameTileCounts = [];
+	var frameTileCounts = {};
 	var currentFrame = 0;
-	var waitForFrame = [];
-	var frameResolvers = [];
+	var waitForFrame = {};
+	var frameResolvers = {};
 
 	var startTime = performance.now();
+	var bandwidthWindow = [];
+	var bandwidthTimes = [startTime];
+	var bandwidthWindowIndex = 0;
+	var bandwidthWindowSize = 20;
 	var totalBytes = 0;
 
+	var byteOff = 0;
+	var lastRow = 0;
+	var rowOff = 0;
+
+	/*
+		In interactive mode, the cluster is passed single-frame inputs to run.
+		To render a frame, the cluster calls the getInteractiveParams callback to get the frame params.
+		The frame params are then dispatched to cluster nodes for computation.
+		On receiving all the frame tiles for the previous frame, the cluster renders the next frame.
+		
+		async renderFrame() {
+			this.currentFrame++;
+			const interactiveParams = this.getInteractiveParams(this.currentFrame);
+			await Promise.all(this.frameParams.map(tileParams => 
+				this.runJob(tileParams.concat(interactiveParams), this.jobIdx++)
+			));
+			this.lastCompletedFrame++;
+		}
+		
+		while (running) {
+			if (lastCompletedFrame >= currentFrame - 1) {
+				renderFrame();
+			}
+		}
+	*/
+	var mouse = {x: 0, y: 0};
+	window.onmousemove = function(ev) {
+		mouse.x = (ev.clientX / window.innerWidth) * 2 - 1;
+		mouse.y = (ev.clientY / window.innerHeight) * 2 - 1;
+	};
+	var startTime = performance.now();
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -97,6 +133,10 @@ function send(event) {
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
+		interactive: interactive,
+		getInteractiveParams: function(frame) {
+			return [mouse.x, mouse.y, (performance.now()-startTime)/1000.0, frame];
+		},
 		onResponse: this.vmlanguage.value === 'glsl'
 			? [
 				(header, input, runJob, jobIdx, next) => {
@@ -108,19 +148,38 @@ function send(event) {
 							frameResolvers[frame] = resolve;
 						});
 					}
+					byteOff = 0;
+					rowOff = 0;
+					lastRow = 0;
 					//if (!outputAnimated) {
 					//	output.textContent = JSON.stringify(header);
 					//}
-				}, (data, input, runJob, jobIdx, next) => {
+				}, (data, input, runJob, jobIdx, next, node, header, u8) => {
 					if (data.byteLength > 0) {
 						next();
+						var tileCount = (outputTilesX * outputTilesY);
+						var frame = Math.floor(jobIdx / tileCount);
+						var tileIdx = jobIdx - (frame * tileCount);
+						var y = Math.floor(tileIdx / outputTilesX);
+						var x = tileIdx - (y * outputTilesX);
+						byteOff += data.byteLength;
+						var rows = Math.floor((byteOff - rowOff)  / (outputWidth * 4));
+						if (rows >= 512 || rows + lastRow === outputHeight) {
+							videoScreen.updateTexture(u8, x * outputWidth, y * outputHeight + lastRow, outputWidth, rows, rowOff);
+							lastRow += rows;
+							rowOff = lastRow * (outputWidth * 4);
+						}
 					}
 				}, async (arrayBuffer, input, runJob, jobIdx, next) => {
 					// var t = performance.now();
 					// var elapsed = t - lastFrame;
 					// lastFrame = t;
 					// console.log(elapsed);
-					totalBytes += arrayBuffer.byteLength;
+					bandwidthWindow[bandwidthWindowIndex] = arrayBuffer.byteLength;
+					bandwidthWindowIndex = (bandwidthWindowIndex + 1) % bandwidthWindowSize;
+					bandwidthTimes[bandwidthWindowIndex] = performance.now();
+					totalBytes = bandwidthWindow.reduce((s,i) => s+i, 0);
+					startTime = bandwidthTimes.reduce((s,i) => Math.min(s,i));
 					console.log((totalBytes/1e9) / ((performance.now() - startTime)/1000), 'GB/s');
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
@@ -151,12 +210,15 @@ function send(event) {
 					}
 
 					if (frameTileCounts[frame] === tileCount) {
+						delete waitForFrame[frame];
+						delete frameTileCounts[frame];
 						currentFrame = Math.max(currentFrame, frame + 1);
 						videoScreen.update();
-						// console.log('redraw', frame);
+						// console.log('draw', frame);
 						// console.log('resolving frame', frame);
 						if (frameResolvers[currentFrame]) {
 							frameResolvers[currentFrame]();
+							delete frameResolvers[currentFrame];
 						}
 					}
 				}
@@ -202,7 +264,7 @@ function send(event) {
 
 async function processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	const resultHeader = arrayBuffer.header;
-	videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
+	// videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
 	// console.log('updateTexture', frame);
 	return;
 
@@ -260,7 +322,7 @@ require(['vs/editor/editor.main'], function () {
 			Tiles: []
 		};
 		text.split("\n").forEach(line => {
-			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly)\s+(.*)/);
+			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly|Interactive)\s+(.*)/);
 			if (m) {
 				var key = m[1];
 				var value = m[2].replace(/^\s+|\s+$/g, '').split(/,| +/).map(s => s.replace(/\s+/g, ''));
@@ -277,6 +339,7 @@ require(['vs/editor/editor.main'], function () {
 		vmoutputtilesx.value = config.Tiles[0] || '';
 		vmoutputtilesy.value = config.Tiles[1] || '';
 		vmgpuonly.checked = config.GPUOnly[0] === 'true';
+		vminteractive.checked = config.Interactive[0] === 'true';
 		window.vmsrcEditor = monaco.editor.create(document.getElementById('container'), {
 			value: text,
 			language: 'c'

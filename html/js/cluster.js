@@ -100,44 +100,94 @@ class Cluster {
 			onResponse,
 			workgroups,
 			useHTTP,
-			gpuOnly
+			gpuOnly,
+			interactive,
+			getInteractiveParams
 		} = options;
 		var green = '';
 		var cluster = this.parse(nodes, gpuOnly);
 		var inputs = this.expandParams(params);
 		var vmSuffix = '/new' + green + '/' + name;
+		const log = document.createElement('pre');
+		log.style.position = 'absolute';
+		log.style.right = '10px';
+		log.style.top = '10px';
+		log.style.zIndex = 1000;
+		log.style.background = 'white';
+		log.style.padding = '10px';
+		log.style.color = 'black';
+		document.body.appendChild(log);
 		var runJob = (jobInput, jobIndex) => {
-			cluster.getNode(async (node, next) => {
-				const inputLength = jobInput.length * 4;
-				const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex, inputLength, outputLength);
-				if (!program) {
-					cluster.disableNode(node);
-					return runJob(jobInput);
-				}
-				const bin = program.blob;
-				const url = node.url + vmSuffix;
-
-				if (!useHTTP && language === 'glsl') {
-					const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
-					socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
-					socket.send(new Float32Array(jobInput).buffer);
-				} else {
-					let jobIdx = jobIndex;
-					// do a normal HTTP request
-					const args = { input: jobInput, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
-					const body = new Blob([JSON.stringify(args), '\n', bin]);
-					var res;
-					try {
-						res = await fetch(url, { method: 'POST', body });
-					} catch (e) {
+			return new Promise((resolve, reject) => 
+			{
+				cluster.getNode(async (node, next) => {
+					const inputLength = jobInput.length * 4;
+					const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex, inputLength, outputLength);
+					if (!program) {
 						cluster.disableNode(node);
-						runJob(jobInput);
+						await runJob(jobInput, jobIndex);
+						resolve();
+						return;
 					}
-					return onResponse(res, jobInput, runJob, jobIdx);
-				}
-			}, language === 'glsl' ? 'SPIRV' : 'ISPC');
+					const bin = program.blob;
+					const url = node.url + vmSuffix;
+	
+					if (!useHTTP && language === 'glsl') {
+						const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
+						onResponse = onResponse.slice();
+						const onDone = onResponse[2];
+						onResponse[2] = function() {
+							onDone.apply(this, arguments);
+							resolve();
+						};
+						socket.queue.push([onResponse, jobInput, runJob, jobIndex, next]);
+						log.textContent = jobInput.map(n => Math.floor(n*100)/100).join("\n");
+						socket.send(new Float32Array(jobInput).buffer);
+					} else {
+						let jobIdx = jobIndex;
+						// do a normal HTTP request
+						const args = { input: jobInput, outputLength, language, workgroups, vulkanDeviceIndex: node.vulkanDeviceIndex, binary: program.isBinary };
+						const body = new Blob([JSON.stringify(args), '\n', bin]);
+						var res;
+						try {
+							res = await fetch(url, { method: 'POST', body });
+						} catch (e) {
+							cluster.disableNode(node);
+							await runJob(jobInput, jobIndex);
+							resolve();
+							return;
+						}
+						await onResponse(res, jobInput, runJob, jobIdx);
+						resolve();
+					}
+				}, language === 'glsl' ? 'SPIRV' : 'ISPC');
+			});
 		};
-		inputs.forEach(runJob);
+		if (interactive) {
+			cluster.running = true;
+			let jobIdx = 0;
+			let currentFrame = 0;
+			let lastFinishedFrame = -1;
+			const ival = setInterval(async () => {
+				if (!cluster.running) {
+					clearInterval(ival);
+				} else if (lastFinishedFrame === currentFrame - 1) {
+					const interactiveParams = getInteractiveParams(currentFrame);
+					// log.textContent = inputs[0].concat(interactiveParams).map(n => Math.floor(n*100)/100).join("\n");
+					// console.log(currentFrame, interactiveParams);
+					currentFrame++;
+					const jobs = inputs.map((input) => {
+						const res = runJob(input.concat(interactiveParams), jobIdx);
+						jobIdx++;
+						return res;
+					});
+					await Promise.all(jobs);
+					lastFinishedFrame++;
+				}
+			}, 1);
+		} else {
+			inputs.forEach(runJob);
+		}
 		return cluster;
 	}
 
@@ -179,7 +229,7 @@ class Cluster {
 						this.onHeader = onHeader;
 						this.onBody = onBody;
 						this.onData = onData;
-						this.kernelArgs = [input, runJob, jobIdx, next, node, this.header];
+						this.kernelArgs = [input, runJob, jobIdx, next, node, this.header, this.u8];
 						this.onHeader(this.header, ...this.kernelArgs);
 					} else {
 						this.started = false;
@@ -219,23 +269,21 @@ class Cluster {
 					this.receivedBytes += block.byteLength;
 					if (this.receivedBytes >= this.programArgs.outputLength) {
 						var offset = block.byteLength - (this.receivedBytes - this.programArgs.outputLength);
-						if (this.onData) {
-							var lastSlice = block.slice(0, offset);
-							this.onData(lastSlice, ...this.kernelArgs);
-						}
+						var lastSlice = block.slice(0, offset);
 						var ab = null;
 						if (this.onBody) {
 							this.u8.set(new Uint8Array(lastSlice), this.receivedBytes - block.byteLength);
 							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
 							ab = this.u8.buffer;
 						}
+						if (this.onData) {
+							this.onData(lastSlice, ...this.kernelArgs);
+						}
 						this.handleResult(ab, offset, block)
 					} else {
+						this.u8.set(new Uint8Array(block), this.receivedBytes - block.byteLength)
 						if (this.onData) {
 							this.onData(block, ...this.kernelArgs);
-						}
-						if (this.onBody) {
-							this.u8.set(new Uint8Array(block), this.receivedBytes - block.byteLength)
 						}
 					}
 				};
