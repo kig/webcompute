@@ -8,7 +8,7 @@ const bonjour = require('bonjour')({ interface: '0.0.0.0' });
 const http = require('http');
 const WebSocket = require('ws');
 
-const { fork, exec, execFile, execSync, execFileSync } = require('child_process');
+const { fork, exec, execFile, execSync, execFileSync, spawn } = require('child_process');
 
 
 const app = express();
@@ -313,19 +313,26 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
         }
 
         if (BuildTarget.platform === 'windows') {
-            ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
-                encoding: 'buffer',
-                stdio: ['pipe', 'pipe', 'inherit'],
-                maxBuffer: Infinity,
-                cwd: './spirv/build'
-            });
+            ps = spawn(
+                `${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, 
+                [`./targets/${target}/program.spv`], 
+                {
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    cwd: './spirv/build'
+                }
+            );
         } else {
-            ps = exec(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
-                encoding: 'buffer',
-                stdio: ['pipe', 'pipe', 'inherit'],
-                maxBuffer: Infinity,
-                cwd: './spirv/build'
-            });
+            ps = spawn(
+                `${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, 
+                [],
+                {
+                    shell: true,
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    cwd: './spirv/build'
+                }
+            );
         }
 
     } else {
@@ -334,12 +341,9 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
         */
         buildSPIRVToISPC(target, program, programInputObj)
 
-        ps = execFile(`./targets/${target}/program`, [], {
+        ps = spawn(`./targets/${target}/program`, [], {
             encoding: 'buffer',
             stdio: ['pipe', 'pipe', 'inherit'],
-            maxBuffer: Infinity,
-            // Set OMP_NUM_THREADS=8 for Android targets
-            env: { ...process.env, 'OMP_NUM_THREADS': '8' },
             cwd: './spirv/build'
         });
 
@@ -410,6 +414,7 @@ const runSPIRVSocket = function (socket, req) {
                 i32[5] = programInputObj.inputLength;
 
                 ps = createSPIRVProcess(target, program, programInputObj, programHash);
+                ps.stdin.on('drain', () => socket._socket.resume());
 
 
                 console.log("  ps open", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
@@ -423,17 +428,18 @@ const runSPIRVSocket = function (socket, req) {
                     socket.close();
                 });
 
-                var chunks = [];
-                var readLength = 0;
-
                 ps.stdout.on('data', (data) => {
                     try {
                         socket.send(data);
+                        //if (socket._socket.bufferSize > 0) {
+                        //    ps.stdout.pause();
+                        //}
                     } catch (err) {
                         console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
                         socket.close();
                     }
                 });
+                socket._socket.on('drain', () => ps.stdout.resume());
                 ps.stdout.on('close', () => {
                     console.log('  ps.stdout close', programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
@@ -449,7 +455,9 @@ const runSPIRVSocket = function (socket, req) {
             }
         } else {
             try {
-                ps.stdin.write(msg);
+                if (!ps.stdin.write(msg)) {
+                    socket._socket.pause();
+                }
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);
                 console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
