@@ -122,7 +122,7 @@ function send(event) {
 		mouse.x = (ev.clientX / window.innerWidth) * 2 - 1;
 		mouse.y = (ev.clientY / window.innerHeight) * 2 - 1;
 	};
-	var startTime = performance.now();
+	var runStartTime = performance.now();
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -135,7 +135,7 @@ function send(event) {
 		useHTTP: false,
 		interactive: interactive,
 		getInteractiveParams: function(frame) {
-			return [mouse.x, mouse.y, (performance.now()-startTime)/1000.0, frame];
+			return [mouse.x, mouse.y, (performance.now()-runStartTime)/1000.0, frame];
 		},
 		onResponse: this.vmlanguage.value === 'glsl'
 			? [
@@ -204,7 +204,7 @@ function send(event) {
 						if (!outputAnimated) {
 							output.remove();
 						}
-						runJob(input);
+						runJob(input, jobIdx);
 					} else {
 						processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
 					}
