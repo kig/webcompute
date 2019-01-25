@@ -117,6 +117,7 @@ class Cluster {
 		log.style.padding = '10px';
 		log.style.color = 'black';
 		document.body.appendChild(log);
+		const onDone = onResponse[2];
 		var runJob = (jobInput, jobIndex) => {
 			return new Promise((resolve, reject) => 
 			{
@@ -135,7 +136,6 @@ class Cluster {
 					if (!useHTTP && language === 'glsl') {
 						const socket = await this.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength);
 						onResponse = onResponse.slice();
-						const onDone = onResponse[2];
 						onResponse[2] = function() {
 							onDone.apply(this, arguments);
 							resolve();
