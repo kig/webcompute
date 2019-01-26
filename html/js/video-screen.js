@@ -93,6 +93,9 @@ class VideoScreen {
         this.canvas.width = width;
         this.canvas.height = height;
         this.canvas.update = () => this.update(true);
+        this.ctx = this.canvas.getContext('2d');
+        
+        /*
         var glc = this.canvas;
         var gl = this.gl = this.canvas.getContext('webgl2', {preserveDrawingBuffer: true, alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: true});
         gl.clearColor(0,0,0,1);
@@ -127,6 +130,7 @@ class VideoScreen {
 		// 	forceRedraw = true;
         // };
         // window.addEventListener('resize', resize, false);
+        */
 
         this.canvas.className = 'video-canvas';
 
@@ -135,36 +139,43 @@ class VideoScreen {
         this.videoChanged = false;
         this.videoFrame = -1;
         this.stopped = false;
+        this.buffer = this.ctx.getImageData(0, 0, this.width, this.height);
+        this.canvas.style.imageRendering = 'optimizespeed';
     }
 
     updateTexture(uint8array, x, y, width, height, offset=0) {
         if (!this.stopped) {
-            var gl = this.gl;
-            if (offset > 0) {
-                uint8array = new Uint8Array(uint8array.buffer, offset);
-            }
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, width, height, this.pixelFormat, gl.UNSIGNED_BYTE, uint8array);
+            // var gl = this.gl;
+            // if (offset > 0) {
+            // uint8array = new Uint8ClampedArray(uint8array.buffer, offset, width * height * 4);
+            // }
+            // if (x === 0 && width === this.width) {
+                // this.buffer.data.set(uint8array, y * this.width * 4);
+            // }
+            // this.ctx.putImageData(this.buffer, 0, 0, x, y, width, height);
+            // gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, width, height, this.pixelFormat, gl.UNSIGNED_BYTE, uint8array);
             this.videoChanged = true;
         }
     }
 
     update(force = false) {
         if (force || this.videoChanged) {
-            var bbox = this.canvas.getBoundingClientRect();
-            var dpr = (window.devicePixelRatio || 1);
-            if (this.canvas.width !== bbox.width * dpr || this.canvas.height !== bbox.height * dpr) {
-                this.canvas.width = bbox.width * dpr;
-                this.canvas.height = bbox.height * dpr;
-                this.iResolution[0] = this.canvas.width;
-                this.iResolution[1] = this.canvas.height;
-                this.gl.viewport(0,0, this.canvas.width, this.canvas.height);
-                u3fv(this.gl, this.program, 'iResolution', this.iResolution);
-            }
-            var gl = this.gl;
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-            gl.activeTexture( gl.TEXTURE0 );
-            gl.bindTexture(gl.TEXTURE_2D, this.tex);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            // var bbox = this.canvas.getBoundingClientRect();
+            // var dpr = (window.devicePixelRatio || 1);
+            // if (this.canvas.width !== bbox.width * dpr || this.canvas.height !== bbox.height * dpr) {
+            //     this.canvas.width = bbox.width * dpr;
+            //     this.canvas.height = bbox.height * dpr;
+            //     this.iResolution[0] = this.canvas.width;
+            //     this.iResolution[1] = this.canvas.height;
+            //     // this.gl.viewport(0,0, this.canvas.width, this.canvas.height);
+            //     // u3fv(this.gl, this.program, 'iResolution', this.iResolution);
+            // }
+            // var gl = this.gl;
+            // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            // gl.activeTexture( gl.TEXTURE0 );
+            // gl.bindTexture(gl.TEXTURE_2D, this.tex);
+            // gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.ctx.putImageData(this.buffer, 0, 0);
             this.videoFrame++;
             this.videoChanged = false;
         }

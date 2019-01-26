@@ -123,6 +123,7 @@ function send(event) {
 		mouse.y = (ev.clientY / window.innerHeight) * 2 - 1;
 	};
 	var runStartTime = performance.now();
+	var maxSpeed = 0;
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
@@ -130,6 +131,7 @@ function send(event) {
 		workgroups: workgroups,
 		source: source,
 		gpuOnly: gpuOnly,
+		buffer: videoScreen.buffer.data,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
@@ -154,17 +156,17 @@ function send(event) {
 					//if (!outputAnimated) {
 					//	output.textContent = JSON.stringify(header);
 					//}
-				}, (data, input, runJob, jobIdx, next, node, header, u8) => {
-					if (data.byteLength > 0) {
+				}, (byteLength, input, runJob, jobIdx, next, node, header, u8) => {
+					if (byteLength > 0) {
 						next();
 						var tileCount = (outputTilesX * outputTilesY);
 						var frame = Math.floor(jobIdx / tileCount);
 						var tileIdx = jobIdx - (frame * tileCount);
 						var y = Math.floor(tileIdx / outputTilesX);
 						var x = tileIdx - (y * outputTilesX);
-						byteOff += data.byteLength;
+						byteOff += byteLength;
 						var rows = Math.floor((byteOff - rowOff)  / (outputWidth * 4));
-						if (rows >= 512 || rows + lastRow === outputHeight) {
+						if (rows >= 1080 || rows + lastRow === outputHeight) {
 							videoScreen.updateTexture(u8, x * outputWidth, y * outputHeight + lastRow, outputWidth, rows, rowOff);
 							lastRow += rows;
 							rowOff = lastRow * (outputWidth * 4);
@@ -180,15 +182,16 @@ function send(event) {
 					bandwidthTimes[bandwidthWindowIndex] = performance.now();
 					totalBytes = bandwidthWindow.reduce((s,i) => s+i, 0);
 					startTime = bandwidthTimes.reduce((s,i) => Math.min(s,i));
-					console.log((totalBytes/1e9) / ((performance.now() - startTime)/1000), 'GB/s');
+					var currentSpeed = (totalBytes/1e9) / ((performance.now() - startTime)/1000);
+					maxSpeed = Math.max(maxSpeed, currentSpeed);
 					next();
 					var tileCount = (outputTilesX * outputTilesY);
 					var frame = Math.floor(jobIdx / tileCount);
 					frameTileCounts[frame]++;
 					if (frame !== currentFrame) {
-						var header = arrayBuffer.header;
-						arrayBuffer = arrayBuffer.slice(0);
-						arrayBuffer.header = header;
+						// var header = arrayBuffer.header;
+						// arrayBuffer = arrayBuffer.slice(0);
+						// arrayBuffer.header = header;
 						// console.log('waiting for', frame, waitForFrame[frame], frameResolvers[frame]);
 						await waitForFrame[frame];
 					}
@@ -214,6 +217,12 @@ function send(event) {
 						delete frameTileCounts[frame];
 						currentFrame = Math.max(currentFrame, frame + 1);
 						videoScreen.update();
+						videoScreen.ctx.fillStyle = 'black';
+						videoScreen.ctx.fillText(maxSpeed, 10, 1060);
+						videoScreen.ctx.fillText(currentSpeed, 10, 1040);
+						videoScreen.ctx.fillStyle = 'white';
+						videoScreen.ctx.fillText(maxSpeed, 10, 20);
+						videoScreen.ctx.fillText(currentSpeed, 10, 40);
 						// console.log('draw', frame);
 						// console.log('resolving frame', frame);
 						if (frameResolvers[currentFrame]) {
@@ -263,7 +272,7 @@ function send(event) {
 
 
 async function processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
-	const resultHeader = arrayBuffer.header;
+	// const resultHeader = arrayBuffer.header;
 	// videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
 	// console.log('updateTexture', frame);
 	return;
