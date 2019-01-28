@@ -252,23 +252,23 @@ class Cluster {
 							resolve(this);
 						}
 					} else {
-						this.addBlock(ev.data);
+						this.addBlock(ev.data, 0);
 						// delete ev.data;
 					}
 				};
 
-				socket.addBlock = function (block) {
+				socket.addBlock = function (block, blockOffset) {
 					if (!this.started) {
 						this.started = true;
 						this.processQueue();
 					}
-					this.receivedBytes += block.byteLength;
+					var blockByteLength = block.byteLength - blockOffset;
+					this.receivedBytes += blockByteLength;
 					if (this.receivedBytes >= this.programArgs.outputLength) {
-						var offset = block.byteLength - (this.receivedBytes - this.programArgs.outputLength);
+						var offset = blockByteLength - (this.receivedBytes - this.programArgs.outputLength);
 						var ab = undefined;
 						if (this.onBody) {
-							var lastSlice = block.slice(0, offset);
-							this.u8.set(new Uint8Array(lastSlice), this.receivedBytes - block.byteLength);
+							this.u8.set(new Uint8Array(block, blockOffset, offset), this.receivedBytes - blockByteLength);
 							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
 							ab = this.u8.buffer;
 						}
@@ -279,9 +279,9 @@ class Cluster {
 						this.handleResult(ab, offset, block)
 						ab = undefined;
 					} else {
-						this.u8.set(new Uint8Array(block), this.receivedBytes - block.byteLength)
+						this.u8.set(new Uint8Array(block, blockOffset), this.receivedBytes - blockByteLength)
 						if (this.onData) {
-							this.onData(block.byteLength, ...this.kernelArgs);
+							this.onData(blockByteLength, ...this.kernelArgs);
 						}
 					}
 					block = undefined;
@@ -297,10 +297,8 @@ class Cluster {
 					this.onHeader = this.onBody = this.onData = null;
 					this.receivedBytes = 0;
 					this.started = false;
-					if (offset < block.length) {
-						var firstSlice = block.slice(offset);
-						this.addBlock(firstSlice);
-						firstSlice = undefined;
+					if (offset < block.byteLength) {
+						this.addBlock(block, offset);
 					}
 					block = undefined;
 				};
