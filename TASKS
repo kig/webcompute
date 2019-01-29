@@ -1,15 +1,14 @@
 NEXT STEPS
-    - Frame sync
-    - Interactive AOBench
 
 TASKS
-    [] Interactive render
-        [] Frame sync
-        [] Inputs that change according to UI state
-            [] Time
+    [x] Interactive render
+        [x] Frame sync
+        [x] Inputs that change according to UI state
+            [x] Time
+            [x] Frame
             [] Time delta
             [] Mouse / Touch
-                [] Position
+                [x] Position
                 [] Buttons
                 [] Click
                 [] Drag
@@ -18,6 +17,26 @@ TASKS
         [] Latency limit to restrict node selection
         [] Job distribution network
         [] Reducer network
+
+    [] Compression
+        [] libjpeg-turbo
+            [x] Test performance -> multiple GB/s
+            [] Add to runner output
+        [] Fast lossless image compression (JPEG-LS, LOCO, something)
+            [x] Testing: Hilbert + delta + zstd -> multiple GB/s theoretically
+            [x] Testing: PNG -1 -> 600-700 MB/s
+            [x] Testing: zstd -1 | nc -> nc | zstd -1, 300 MB/s :(
+            [x] time zstd -1 -T16 < 10GB | rdpipe vpn:'zstd -1 -d -T2 >/dev/null' (not good)
+            [x] time pzstd -1 -p32 < 10GB | rdpipe vpn:'pzstd -d -p8 >/dev/null' -> Wow! 2 GB/s data transfer using 1 GB/s of bandwidth.
+            [] Tack Hilbert + delta to pzstd pipe: time hdelta < 10GB | pzstd -1 -p32
+
+    [] Complex dataflow demo
+        [] Rasterizer pipeline
+            [] draw arrays
+            [] vertex shader
+            [] rasterizer
+            [] fragment shader
+            [] blend
 
     [] Target optimization
         [] Either figure out

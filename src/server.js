@@ -8,7 +8,7 @@ const bonjour = require('bonjour')({ interface: '0.0.0.0' });
 const http = require('http');
 const WebSocket = require('ws');
 
-const { fork, exec, execFile, execSync, execFileSync } = require('child_process');
+const { fork, exec, execFile, execSync, execFileSync, spawn } = require('child_process');
 
 
 const app = express();
@@ -313,19 +313,26 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
         }
 
         if (BuildTarget.platform === 'windows') {
-            ps = execFile(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, [`./targets/${target}/program.spv`], {
-                encoding: 'buffer',
-                stdio: ['pipe', 'pipe', 'inherit'],
-                maxBuffer: Infinity,
-                cwd: './spirv/build'
-            });
+            ps = spawn(
+                `${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch}`, 
+                [`./targets/${target}/program.spv`], 
+                {
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    cwd: './spirv/build'
+                }
+            );
         } else {
-            ps = exec(`${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, {
-                encoding: 'buffer',
-                stdio: ['pipe', 'pipe', 'inherit'],
-                maxBuffer: Infinity,
-                cwd: './spirv/build'
-            });
+            ps = spawn(
+                `${VulkanExtras}bin/vulkanRunner-${BuildTarget.platform}-${BuildTarget.arch} ./targets/${target}/program.spv`, 
+                [],
+                {
+                    shell: true,
+                    encoding: 'buffer',
+                    stdio: ['pipe', 'pipe', 'inherit'],
+                    cwd: './spirv/build'
+                }
+            );
         }
 
     } else {
@@ -334,12 +341,9 @@ const createSPIRVProcess = function (target, program, programInputObj, programHa
         */
         buildSPIRVToISPC(target, program, programInputObj)
 
-        ps = execFile(`./targets/${target}/program`, [], {
+        ps = spawn(`./targets/${target}/program`, [], {
             encoding: 'buffer',
             stdio: ['pipe', 'pipe', 'inherit'],
-            maxBuffer: Infinity,
-            // Set OMP_NUM_THREADS=8 for Android targets
-            env: { ...process.env, 'OMP_NUM_THREADS': '8' },
             cwd: './spirv/build'
         });
 
@@ -379,6 +383,10 @@ const runSPIRVSocket = function (socket, req) {
 
     var headerMsg = true;
     var outputLength = 0;
+    var pipelined = 0;
+    var maxPipelined = 0;
+    var t0 = Date.now();
+
     socket.on('message', msg => {
         if (headerMsg) {
             try {
@@ -410,6 +418,7 @@ const runSPIRVSocket = function (socket, req) {
                 i32[5] = programInputObj.inputLength;
 
                 ps = createSPIRVProcess(target, program, programInputObj, programHash);
+                ps.stdin.on('drain', () => socket._socket.resume());
 
 
                 console.log("  ps open", programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
@@ -423,17 +432,78 @@ const runSPIRVSocket = function (socket, req) {
                     socket.close();
                 });
 
-                var chunks = [];
-                var readLength = 0;
+                var dstBuffer1 = Buffer.alloc(outputLength/16);
+                var dstBuffer2 = Buffer.alloc(outputLength/16);
+                var tmp;
+                var dstOffset = 0;
+                var remaining = dstBuffer1.byteLength;
+                var firstLen = 0;
+                var secondOffset = 0;
+
+                var inFlight = 0;
+
+                var resume = function() {
+                    inFlight--;
+                    if (inFlight < 2) {
+                        ps.stdout.resume();
+                    }
+                };
+
+                var addBlock = function(data, offset) {
+                    firstLen = data.byteLength - offset;
+                    secondOffset = -1;
+                    if (remaining < firstLen) {
+                        firstLen = remaining;
+                        secondOffset = offset + remaining;
+                    }
+                    data.copy(dstBuffer1, dstOffset, offset, offset+firstLen);
+                    remaining -= firstLen;
+                    dstOffset += firstLen;
+                    if (remaining === 0) {
+                        inFlight++;
+                        if (inFlight > 1) {
+                            ps.stdout.pause();
+                        }
+                        socket.send(dstBuffer1, resume);
+                        tmp = dstBuffer1;
+                        dstBuffer1 = dstBuffer2;
+                        dstBuffer2 = tmp;
+                        dstOffset = 0;
+                        remaining = dstBuffer1.byteLength;
+                    }
+                    if (secondOffset > -1) {
+                        addBlock(data, secondOffset);
+                    }
+                };
+
+                var receivedBytes = 0;
 
                 ps.stdout.on('data', (data) => {
                     try {
-                        socket.send(data);
+                        var t0 = new Date();
+                        addBlock(data, 0);
+                        if (new Date() - t0 > 100) {
+                            console.log("slow addBlock", new Date() - t0);
+                        }
+                        // socket.send(data);
+                        //if (socket._socket.bufferSize > 0) {
+                        //    ps.stdout.pause();
+                        //}
                     } catch (err) {
                         console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
                         socket.close();
                     }
+                    receivedBytes += data.byteLength;
+                    while (receivedBytes >= programInputObj.outputLength) {
+                        receivedBytes -= programInputObj.outputLength;
+                        pipelined--;
+                        var t1 = Date.now();
+                        if (t1 - t0 > 100) {
+                            console.log('slow frame', pipelined, receivedBytes, t1 - t0);
+                        }
+                    }
                 });
+                socket._socket.on('drain', () => ps.stdout.resume());
                 ps.stdout.on('close', () => {
                     console.log('  ps.stdout close', programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName);
                     socket.close();
@@ -449,7 +519,18 @@ const runSPIRVSocket = function (socket, req) {
             }
         } else {
             try {
-                ps.stdin.write(msg);
+                if (!ps.stdin.write(msg)) {
+                //    socket._socket.pause();
+                }
+                if (Date.now() - t0 > 100) {
+                    console.log('slow frame receive', pipelined, Date.now() - t0);
+                }
+                t0 = Date.now();
+                pipelined++;
+                if (pipelined > maxPipelined) {
+                    maxPipelined = pipelined;
+                    console.log('max pipelined', maxPipelined);
+                }
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);
                 console.log(programInputObj.vulkanDevice.VkPhysicalDeviceProperties.deviceName, err);
