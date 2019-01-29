@@ -66,7 +66,10 @@ class ComputeApplication
     VkDescriptorSetLayout descriptorSetLayout;
 
     VkBuffer buffer;
+    VkBuffer buffer2;
+
     VkDeviceMemory bufferMemory;
+    VkDeviceMemory bufferMemory2;
 
     VkBuffer inputBuffer;
     VkDeviceMemory inputBufferMemory;
@@ -82,6 +85,7 @@ class ComputeApplication
 
     void *mappedInputMemory = NULL;
     void *mappedOutputMemory = NULL;
+    void *mappedOutputMemory2 = NULL;
 
     uint32_t queueFamilyIndex;
 
@@ -135,14 +139,24 @@ class ComputeApplication
         // A done-mode buffer is a full unsynced buffer, ready to be copied from device to host. [Output buffer]
         // A read-mode buffer is a full synced buffer, ready to be copied to WebSocket. [Output buffer]
 
+        bool firstFrame = true;
+
         while (readInput()) {
             writeInput();
             // Waits for the target buffer to become ready to write
             startCommandBuffer();
+            if (!firstFrame) {
+                readOutput();
+                writeOutput();
+            } else {
+                firstFrame = false;
+            }
             waitCommandBuffer();
             // Sets the target buffer flag to done
             // Swaps target buffer and output buffer
-            // swapOutputBuffers();
+            swapOutputBuffers();
+        }
+        if (!firstFrame) {
             readOutput();
             writeOutput();
         }
@@ -173,17 +187,31 @@ class ComputeApplication
         cleanup();
     }
 
+    void swapOutputBuffers() {
+        auto tmpB = buffer;
+        buffer = buffer2;
+        buffer2 = tmpB;
+        auto tmp = bufferMemory;
+        bufferMemory = bufferMemory2;
+        bufferMemory2 = tmp;
+        auto tmpM = mappedOutputMemory;
+        mappedOutputMemory = mappedOutputMemory2;
+        mappedOutputMemory2 = tmpM;
+    }
+
     void mapMemory()
     {
         // Map the buffer memory, so that we can read from it on the CPU.
         vkMapMemory(device, inputBufferMemory, 0, inputBufferSize, 0, &mappedInputMemory);
         vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedOutputMemory);
+        vkMapMemory(device, bufferMemory2, 0, bufferSize, 0, &mappedOutputMemory2);
     }
 
     void unmapMemory()
     {
         vkUnmapMemory(device, inputBufferMemory);
         vkUnmapMemory(device, bufferMemory);
+        vkUnmapMemory(device, bufferMemory2);
     }
 
     void readHeader()
@@ -264,7 +292,7 @@ class ComputeApplication
         VkMappedMemoryRange bufferMemoryRange = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
             .pNext = NULL,
-            .memory = bufferMemory,
+            .memory = bufferMemory2,
             .offset = 0,
             .size = VK_WHOLE_SIZE};
 
@@ -274,7 +302,7 @@ class ComputeApplication
 
     void writeOutput()
     {
-        fwrite(mappedOutputMemory, bufferSize, 1, stdout);
+        fwrite(mappedOutputMemory2, bufferSize, 1, stdout);
         fflush(stdout);
         // vkUnmapMemory(device, bufferMemory);
     }
@@ -503,104 +531,39 @@ class ComputeApplication
         return -1;
     }
 
-    void createBuffer()
+    void createAndAllocateBuffer(VkBuffer *buffer, uint32_t bufferSize, VkDeviceMemory *bufferMemory)
     {
-        /*
-        We will now create a buffer. We will render the mandelbrot set into this buffer
-        in a computer shade later. 
-        */
+        VkBufferCreateInfo bufferCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = bufferSize,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
 
-        VkBufferCreateInfo bufferCreateInfo = {};
-        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferCreateInfo.size = bufferSize;                          // buffer size in bytes.
-        bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;    // buffer is exclusive to a single queue family at a time.
+        VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, buffer));
 
-        VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &buffer)); // create buffer.
-
-        /*
-        But the buffer doesn't allocate memory for itself, so we must do that manually.
-        */
-
-        /*
-        First, we find the memory requirements for the buffer.
-        */
         VkMemoryRequirements memoryRequirements;
-        vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
+        vkGetBufferMemoryRequirements(device, *buffer, &memoryRequirements);
 
-        /*
-        Now use obtained memory requirements info to allocate the memory for the buffer.
-        */
-        VkMemoryAllocateInfo allocateInfo = {};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocateInfo.allocationSize = memoryRequirements.size; // specify required memory.
-        /*
-        There are several types of memory that can be allocated, and we must choose a memory type that:
+        VkMemoryAllocateInfo allocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .allocationSize = memoryRequirements.size
+        };
 
-        1) Satisfies the memory requirements(memoryRequirements.memoryTypeBits). 
-        2) Satifies our own usage requirements. We want to be able to read the buffer memory from the GPU to the CPU
-           with vkMapMemory, so we set VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT. 
-        Also, by setting VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memory written by the device(GPU) will be easily 
-        visible to the host(CPU), without having to call any extra flushing commands. So mainly for convenience, we set
-        this flag.
-        */
         allocateInfo.memoryTypeIndex = findMemoryType(
             memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory)); // allocate memory on device.
+        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, bufferMemory));
 
-        // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory.
-        VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, *buffer, *bufferMemory, 0));
+    }
 
-        {
 
-            /*
-        We will now create a buffer. We will render the mandelbrot set into this buffer
-        in a computer shade later. 
-        */
-
-            VkBufferCreateInfo bufferCreateInfo = {};
-            bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            bufferCreateInfo.size = inputBufferSize;                     // buffer size in bytes.
-            bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-            bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;    // buffer is exclusive to a single queue family at a time.
-
-            VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &inputBuffer)); // create buffer.
-
-            /*
-        But the buffer doesn't allocate memory for itself, so we must do that manually.
-        */
-
-            /*
-        First, we find the memory requirements for the buffer.
-        */
-            VkMemoryRequirements memoryRequirements;
-            vkGetBufferMemoryRequirements(device, inputBuffer, &memoryRequirements);
-
-            /*
-        Now use obtained memory requirements info to allocate the memory for the buffer.
-        */
-            VkMemoryAllocateInfo allocateInfo = {};
-            allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-            allocateInfo.allocationSize = memoryRequirements.size; // specify required memory.
-            /*
-        There are several types of memory that can be allocated, and we must choose a memory type that:
-
-        1) Satisfies the memory requirements(memoryRequirements.memoryTypeBits). 
-        2) Satifies our own usage requirements. We want to be able to read the buffer memory from the GPU to the CPU
-           with vkMapMemory, so we set VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT. 
-        Also, by setting VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memory written by the device(GPU) will be easily 
-        visible to the host(CPU), without having to call any extra flushing commands. So mainly for convenience, we set
-        this flag.
-        */
-            allocateInfo.memoryTypeIndex = findMemoryType(
-                memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-            VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &inputBufferMemory)); // allocate memory on device.
-
-            // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory.
-            VK_CHECK_RESULT(vkBindBufferMemory(device, inputBuffer, inputBufferMemory, 0));
-        }
+    void createBuffer()
+    {
+        createAndAllocateBuffer(&buffer, bufferSize, &bufferMemory);
+        createAndAllocateBuffer(&buffer2, bufferSize, &bufferMemory2);
+        createAndAllocateBuffer(&inputBuffer, inputBufferSize, &inputBufferMemory);
     }
 
     void createDescriptorSetLayout()
@@ -684,6 +647,26 @@ class ComputeApplication
 
         vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
         //printf("vkUpdateDescriptorSets done\n");
+    }
+
+    void updateOutputDescriptorSet()
+    {
+        VkDescriptorBufferInfo outputDescriptorBufferInfo = {
+            .buffer = buffer,
+            .offset = 0,
+            .range = bufferSize};
+
+        VkWriteDescriptorSet writeDescriptorSets[1] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptorSet,
+                .dstBinding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = &outputDescriptorBufferInfo,
+            }};
+
+        vkUpdateDescriptorSets(device, 1, writeDescriptorSets, 0, NULL);        
     }
 
     // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -803,6 +786,29 @@ class ComputeApplication
         commandBufferAllocateInfo.commandBufferCount = 1;                                              // allocate a single command buffer.
         VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
 
+    }
+
+    void createFence() {
+
+        /*
+          We create a fence.
+        */
+        VkFenceCreateInfo fenceCreateInfo = {};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.flags = 0;
+        VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
+        
+        /*
+        Now we shall finally submit the recorded command buffer to a queue.
+        */
+
+    }
+
+    void startCommandBuffer()
+    {
+
+        updateOutputDescriptorSet();
+
         /*
         Now we shall start recording commands into the newly allocated command buffer. 
         */
@@ -827,34 +833,13 @@ class ComputeApplication
         vkCmdDispatch(commandBuffer, workSize[0], workSize[1], workSize[2]);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
-    }
 
-    void createFence() {
 
-        /*
-          We create a fence.
-        */
-        VkFenceCreateInfo fenceCreateInfo = {};
-        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceCreateInfo.flags = 0;
-        VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
-        
-        /*
-        Now we shall finally submit the recorded command buffer to a queue.
-        */
-
-    }
-
-    void startCommandBuffer()
-    {
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;           // submit a single command buffer
-        submitInfo.pCommandBuffers = &commandBuffer; // the command buffer to submit.
-
-        /*
-        We submit the command buffer on the queue, at the same time giving a fence.
-        */
+        VkSubmitInfo submitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &commandBuffer
+        };
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
     }
 
