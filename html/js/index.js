@@ -172,7 +172,7 @@ function send(event) {
 							rowOff = lastRow * (outputWidth * 4);
 						}
 					}
-				}, async (arrayBuffer, input, runJob, jobIdx, next) => {
+				}, async (arrayBuffer, input, runJob, jobIdx, next, node, header, u8) => {
 					// var t = performance.now();
 					// var elapsed = t - lastFrame;
 					// lastFrame = t;
@@ -203,7 +203,7 @@ function send(event) {
 						output = document.createElement('span');
 						document.getElementById('output').append(output);
 					}
-					if (arrayBuffer.header.type === 'error') {
+					if (header.type === 'error') {
 						if (!outputAnimated) {
 							output.remove();
 						}

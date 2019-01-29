@@ -42,9 +42,12 @@ class Cluster {
 		}
 	}
 
+	nah() {}
+
 	getNode(callback, nodeType = 'ISPC') {
-		this.workQueue[nodeType].push(callback);
-		this.processWorkQueue(nodeType);
+		// this.workQueue[nodeType].push(callback);
+		// this.processWorkQueue(nodeType);
+		callback(this.availableNodes['SPIRV'][0], this.nah);
 	}
 
 	async build(node, name, source, language, vulkanDeviceIndex, inputLength, outputLength) {
@@ -118,6 +121,7 @@ class Cluster {
 		log.style.padding = '10px';
 		log.style.color = 'black';
 		document.body.appendChild(log);
+		var sendTime = 0;
 		var runJob = function(jobInput, jobIndex) {
 			return new Promise(function(resolve, reject) {
 				cluster.getNode(async function(node, next) {
@@ -136,6 +140,12 @@ class Cluster {
 						const socket = await Cluster.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength, buffer);
 						socket.queue.push([onResponse, resolve, jobInput, runJob, jobIndex, next]);
 						// log.textContent = jobInput.map(n => Math.floor(n*100)/100).join("\n");
+						var startTime = sendTime;
+						sendTime = performance.now(); 
+						var elapsed = performance.now() - startTime;
+						if (elapsed > 100) {
+							console.log("Slow frame send", elapsed);
+						}
 						socket.send(new Float32Array(jobInput).buffer);
 					} else {
 						let jobIdx = jobIndex;
@@ -161,24 +171,49 @@ class Cluster {
 			cluster.running = true;
 			var jobIdx = 0;
 			var currentFrame = 0;
-			var lastFinishedFrame = -1;
-			var ival = setInterval(async () => {
-				if (!cluster.running) {
-					clearInterval(ival);
-				} else if (lastFinishedFrame === currentFrame - 1) {
+			var pipelineFrames = 2;
+			var framesInPipeline = 0;
+			var dirkelion = 0;
+			var enqueue = async function(x) {
+				while (framesInPipeline < pipelineFrames) {
 					var interactiveParams = getInteractiveParams(currentFrame);
 					// log.textContent = inputs[0].concat(interactiveParams).map(n => Math.floor(n*100)/100).join("\n");
 					// console.log(currentFrame, interactiveParams);
+					framesInPipeline++;
 					currentFrame++;
 					var jobs = [];
-					for (var i = 0; i < inputs.length*3; i++) {
-						jobs[i] = runJob(inputs[i%inputs.length].concat(interactiveParams), jobIdx);
-						jobIdx++;						
+					for (var i = 0*x; i < inputs.length; i++) {
+						jobs[i] = runJob(inputs[0].concat(interactiveParams), jobIdx);
+						jobIdx++;
 					}
 					await Promise.all(jobs);
-					lastFinishedFrame++;
+					framesInPipeline--;
 				}
-			}, 0);
+			}
+			var createRubbish = function() {
+				var s = new Uint8Array(20e6);
+				for (var i = 0; i < 1000; i++) {
+					s[i] = i;
+				}
+				dirkelion = s[47];
+			};
+			var ival = function() {
+				enqueue(dirkelion);
+				// requestAnimationFrame(ival);
+			};
+			setInterval(createRubbish, 2);
+			setInterval(ival, 1);
+			// requestAnimationFrame(ival);
+			var ft = performance.now();
+			var tick = () => {
+				var t = performance.now();
+				if (t - ft > 100) {
+					console.log('slow frame', t-ft);
+				}
+				ft = t;
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
 		} else {
 			inputs.forEach(runJob);
 		}
@@ -252,12 +287,17 @@ class Cluster {
 							resolve(this);
 						}
 					} else {
-						this.addBlock(ev.data, 0);
-						// delete ev.data;
+						var t0 = performance.now();
+						this.addBlock(ev, 0);
+						var elapsed = performance.now() - t0;
+						if (elapsed > 100) {
+							console.log("Slow addBlock", elapsed);
+						}
 					}
 				};
 
-				socket.addBlock = function (block, blockOffset) {
+				socket.addBlock = function (ev, blockOffset) {
+					var block = ev.data;
 					if (!this.started) {
 						this.started = true;
 						this.processQueue();
@@ -266,30 +306,26 @@ class Cluster {
 					this.receivedBytes += blockByteLength;
 					if (this.receivedBytes >= this.programArgs.outputLength) {
 						var offset = blockByteLength - (this.receivedBytes - this.programArgs.outputLength);
-						var ab = undefined;
 						if (this.onBody) {
 							this.u8.set(new Uint8Array(block, blockOffset, offset), this.receivedBytes - blockByteLength);
 							// console.log("got full response", node.vulkanDeviceIndex, outputLength, receivedBytes);
-							ab = this.u8.buffer;
 						}
 						if (this.onData) {
 							this.onData(offset, ...this.kernelArgs);
 						}
 						// delete lastSlice;
-						this.handleResult(ab, offset, block)
-						ab = undefined;
+						this.handleResult(this.u8.buffer, offset, ev)
 					} else {
 						this.u8.set(new Uint8Array(block, blockOffset), this.receivedBytes - blockByteLength)
 						if (this.onData) {
 							this.onData(blockByteLength, ...this.kernelArgs);
 						}
 					}
-					block = undefined;
 				};
 
-				socket.handleResult = function (result, offset, block) {
+				socket.handleResult = function (result, offset, ev) {
+					var block = ev.data;
 					if (this.onBody) {
-						result.header = this.header;
 						this.onBody(result, ...this.kernelArgs);
 						result = undefined;
 					}
@@ -298,7 +334,7 @@ class Cluster {
 					this.receivedBytes = 0;
 					this.started = false;
 					if (offset < block.byteLength) {
-						this.addBlock(block, offset);
+						this.addBlock(ev, offset);
 					}
 					block = undefined;
 				};
