@@ -87,6 +87,51 @@ function send(event) {
 	var startTime = performance.now();
 	var totalBytes = 0;
 
+	// Interactive run
+	// 	1. Create cluster, init sockets
+	//	2. Listen for input events and edit scene state.
+	//  3. Set frame time interval.
+	//  4. Send out frame jobs to cluster (input array, scene state, frame time).
+	//  5. On frame time interval, send out frame jobs again if have received frame before current.
+	//		- E.g. sendFrame(3) ... frame timer hit: await receivedFrame(2); sendFrame(4); 
+	//      - The aim is to get a frame pipeline without bubbles and with max UI responsiveness
+	//		- Update at framerate not tied to vsync: e.g. 47 FPS instead of 30 FPS.
+	//		- Two frames in pipeline: currently rendering and next frame
+	//			- One frame of UI lag
+	//			- No need to wait for current frame before starting on next frame
+	//			- Suppose vsync is every 16.6ms, compute time is 15 ms, transfer time 16 ms, send overhead 1 ms
+	//				grab scene state at 	t=0
+	//				sent to compute 		t=1
+	//				compute finishes at 	t=16
+	//				receive frame at 		t=32
+	//				frame displayed at 		t=33.3
+	//				=> runs at 30 fps, UI lag 33.3 ms, 17.3 ms bubble
+	//			- Pipelined frames:
+	//				grab scene state N		t=-1
+	//				compute N-1 finishes	t=0
+	//				sent N to compute		t=0
+	//				grab scene state N+1	t=14
+	//				compute N finishes 		t=15 
+	//				sent N+1 to compute		t=15
+	//				receive frame N-1		t=16
+	//				frame N-1 displayed		t=16.667
+	//				grab scene state N+2	t=29
+	//				compute N+1 finishes	t=30
+	//				sent N+2 to compute		t=30
+	//				receive frame N			t=31
+	//				frame N displayed at 	t=33.3
+	//				=> runs at 60 fps, UI lag 34.3 ms, 0 ms bubble
+
+	/*
+		Cluster improvements
+			- separate job run and node init
+			- on run, first bring up all nodes
+				nodes.forEach(async n => { const p = await build(n); await createSocket(n, p)) })
+			- jobs should be dispatched to nodes that are ready
+				getNode(p) { availableNodes.find(n => n.isReady(p)) }
+				isReady(p) { sockets[p] && sockets[p].header }
+			- option to wait for all nodes ready before job dispatch
+	*/
 	Cluster.run({
 		name: this.vmname.value,
 		nodes: this.vmnodes.value,
