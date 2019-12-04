@@ -519,17 +519,22 @@ const runSPIRVSocket = function (socket, req) {
             }
         } else {
             try {
-                if (!ps.stdin.write(msg)) {
-                //    socket._socket.pause();
-                }
-                if (Date.now() - t0 > 100) {
-                    console.log('slow frame receive', pipelined, Date.now() - t0);
-                }
-                t0 = Date.now();
-                pipelined++;
-                if (pipelined > maxPipelined) {
-                    maxPipelined = pipelined;
-                    console.log('max pipelined', maxPipelined);
+                if (msg.byteLength === 0) {
+                    ps.stdin.destroy();
+                    console.log('close received');
+                } else {
+                    if (!ps.stdin.write(msg)) {
+                    //    socket._socket.pause();
+                    }
+                    if (Date.now() - t0 > 100) {
+                        console.log('slow frame receive', pipelined, Date.now() - t0);
+                    }
+                    t0 = Date.now();
+                    pipelined++;
+                    if (pipelined > maxPipelined) {
+                        maxPipelined = pipelined;
+                        console.log('max pipelined', maxPipelined);
+                    }
                 }
             } catch (err) {
                 socketError = socketError || JSON.stringify(err);

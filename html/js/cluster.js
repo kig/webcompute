@@ -42,12 +42,9 @@ class Cluster {
 		}
 	}
 
-	nah() {}
-
 	getNode(callback, nodeType = 'ISPC') {
-		// this.workQueue[nodeType].push(callback);
-		// this.processWorkQueue(nodeType);
-		callback(this.availableNodes['SPIRV'][0], this.nah);
+		this.workQueue[nodeType].push(callback);
+		this.processWorkQueue(nodeType);
 	}
 
 	async build(node, name, source, language, vulkanDeviceIndex, inputLength, outputLength) {
@@ -93,25 +90,14 @@ class Cluster {
 	}
 
 	static run(options) {
-		var {
-			nodes,
-			name,
-			language,
-			source,
-			params,
-			outputLength,
-			onResponse,
-			workgroups,
-			useHTTP,
-			buffer,
-			gpuOnly,
-			interactive,
-			getInteractiveParams
+		const { 
+			nodes, name, language, source, params, outputLength, onResponse, workgroups, 
+			useHTTP, buffer, gpuOnly, interactive, getInteractiveParams, greenVM
 		} = options;
-		var green = '';
-		var cluster = this.parse(nodes, gpuOnly);
-		var inputs = this.expandParams(params);
-		var vmSuffix = '/new' + green + '/' + name;
+		const green = greenVM ? '/green' : '';
+		const cluster = this.parse(nodes, gpuOnly);
+		const inputs = this.expandParams(params);
+		const vmSuffix = '/new' + green + '/' + name;
 		const log = document.createElement('pre');
 		log.style.position = 'absolute';
 		log.style.right = '10px';
@@ -121,21 +107,20 @@ class Cluster {
 		log.style.padding = '10px';
 		log.style.color = 'black';
 		document.body.appendChild(log);
-		var sendTime = 0;
-		var runJob = function(jobInput, jobIndex) {
-			return new Promise(function(resolve, reject) {
+		var sendTime = performance.now();
+		const runJob = function(jobInput, jobIndex) {
+			return new Promise((resolve, reject) => {
 				cluster.getNode(async function(node, next) {
 					const inputLength = jobInput.length * 4;
 					const program = await cluster.build(node, name, source, language, node.vulkanDeviceIndex, inputLength, outputLength);
 					if (!program) {
 						cluster.disableNode(node);
 						await runJob(jobInput, jobIndex);
-						resolve();
 						return;
 					}
 					const bin = program.blob;
 					const url = node.url + vmSuffix;
-	
+
 					if (!useHTTP && language === 'glsl') {
 						const socket = await Cluster.getNodeSocket(node, url, name, language, workgroups, program, inputLength, outputLength, buffer);
 						socket.queue.push([onResponse, resolve, jobInput, runJob, jobIndex, next]);
@@ -158,11 +143,10 @@ class Cluster {
 						} catch (e) {
 							cluster.disableNode(node);
 							await runJob(jobInput, jobIndex);
-							resolve();
 							return;
 						}
 						await onResponse(res, jobInput, runJob, jobIdx);
-						resolve();
+						return;
 					}
 				}, language === 'glsl' ? 'SPIRV' : 'ISPC');
 			});
@@ -173,7 +157,6 @@ class Cluster {
 			var currentFrame = 0;
 			var pipelineFrames = 2;
 			var framesInPipeline = 0;
-			var dirkelion = 0;
 			var enqueue = async function(x) {
 				while (framesInPipeline < pipelineFrames) {
 					var interactiveParams = getInteractiveParams(currentFrame);
@@ -190,20 +173,21 @@ class Cluster {
 					framesInPipeline--;
 				}
 			}
-			var createRubbish = function() {
+			// Hack to force quick GC of received frames.
+			// This is needed to maintain a stable frame rate when receiving frames at > 400 MB/s.
+			var gcOptimizationDisabler = 0; 
+			var createGCLoad = function() {
 				var s = new Uint8Array(20e6);
 				for (var i = 0; i < 1000; i++) {
 					s[i] = i;
 				}
-				dirkelion = s[47];
+				gcOptimizationDisabler = s[47];
 			};
 			var ival = function() {
-				enqueue(dirkelion);
-				// requestAnimationFrame(ival);
+				enqueue(gcOptimizationDisabler);
 			};
-			setInterval(createRubbish, 2);
+			setInterval(createGCLoad, 2);
 			setInterval(ival, 1);
-			// requestAnimationFrame(ival);
 			var ft = performance.now();
 			var tick = () => {
 				var t = performance.now();

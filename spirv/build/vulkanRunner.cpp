@@ -139,27 +139,29 @@ class ComputeApplication
         // A done-mode buffer is a full unsynced buffer, ready to be copied from device to host. [Output buffer]
         // A read-mode buffer is a full synced buffer, ready to be copied to WebSocket. [Output buffer]
 
-        bool firstFrame = true;
+        // bool firstFrame = true;
 
         while (readInput()) {
             writeInput();
             // Waits for the target buffer to become ready to write
             startCommandBuffer();
-            if (!firstFrame) {
-                readOutput();
-                writeOutput();
-            } else {
-                firstFrame = false;
-            }
+            // if (!firstFrame) {
+                // readOutput();
+                // writeOutput();
+            // } else {
+            //     firstFrame = false;
+            // }
             waitCommandBuffer();
             // Sets the target buffer flag to done
             // Swaps target buffer and output buffer
             swapOutputBuffers();
-        }
-        if (!firstFrame) {
             readOutput();
             writeOutput();
         }
+        // if (!firstFrame) {
+        //     readOutput();
+        //     writeOutput();
+        // }
         // while (control[state] == RUNNING) {
             // Wait for output buffer to become done.
             // [foreach chunk]

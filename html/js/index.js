@@ -70,9 +70,12 @@ function send(event) {
 	var interactive = this.vminteractive.checked;
 	var gpuOnly = this.vmgpuonly.checked;
 	var workgroups = this.vmworkgroups.value.replace(/\s+/g, '').split(",").map(s => parseInt(s)).slice(0, 3);
+	var targetBuffer;
+	var videoScreen;
 	while (workgroups.size < 3) workgroups.push(1);
 	if (outputAnimated) {
-		var videoScreen = new VideoScreen(outputWidth * outputTilesX, outputHeight * outputTilesY, 4);
+		videoScreen = new VideoScreen(outputWidth * outputTilesX, outputHeight * outputTilesY, 4);
+		targetBuffer = videoScreen.buffer.data;
 		document.getElementById('output').append(videoScreen.canvas);
 	}
 	var source = window.vmsrcEditor.getValue().split("\n")
@@ -176,7 +179,7 @@ function send(event) {
 		workgroups: workgroups,
 		source: source,
 		gpuOnly: gpuOnly,
-		buffer: videoScreen.buffer.data,
+		buffer: targetBuffer,
 		params: this.vmparams.value.replace(/\s+/, '').split(","),
 		outputLength: parseInt(this.vmoutputsize.value),
 		useHTTP: false,
@@ -202,7 +205,7 @@ function send(event) {
 					//	output.textContent = JSON.stringify(header);
 					//}
 				}, (byteLength, input, runJob, jobIdx, next, node, header, u8) => {
-					if (byteLength > 0) {
+					if (byteLength > 0 && videoScreen) {
 						next();
 						var tileCount = (outputTilesX * outputTilesY);
 						var frame = Math.floor(jobIdx / tileCount);
@@ -254,20 +257,24 @@ function send(event) {
 						}
 						runJob(input, jobIdx);
 					} else {
-						processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+						if (!videoScreen) {
+							processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY);
+						}
 					}
 
 					if (frameTileCounts[frame] === tileCount) {
 						delete waitForFrame[frame];
 						delete frameTileCounts[frame];
 						currentFrame = Math.max(currentFrame, frame + 1);
-						videoScreen.update();
-						videoScreen.ctx.fillStyle = 'black';
-						videoScreen.ctx.fillText(maxSpeed, 10, 1060);
-						videoScreen.ctx.fillText(currentSpeed, 10, 1040);
-						videoScreen.ctx.fillStyle = 'white';
-						videoScreen.ctx.fillText(maxSpeed, 10, 20);
-						videoScreen.ctx.fillText(currentSpeed, 10, 40);
+						if (videoScreen) {
+							videoScreen.update();
+							videoScreen.ctx.fillStyle = 'black';
+							videoScreen.ctx.fillText(maxSpeed, 10, 1060);
+							videoScreen.ctx.fillText(currentSpeed, 10, 1040);
+							videoScreen.ctx.fillStyle = 'white';
+							videoScreen.ctx.fillText(maxSpeed, 10, 20);
+							videoScreen.ctx.fillText(currentSpeed, 10, 40);
+						}
 						// console.log('draw', frame);
 						// console.log('resolving frame', frame);
 						if (frameResolvers[currentFrame]) {
@@ -316,14 +323,9 @@ function send(event) {
 }
 
 
-async function processResponse(videoScreen, arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
-	// const resultHeader = arrayBuffer.header;
-	// videoScreen.updateTexture(new Uint8Array(arrayBuffer), x * outputWidth, y * outputHeight, outputWidth, outputHeight);
-	// console.log('updateTexture', frame);
-	return;
-
+async function processResponse(arrayBuffer, output, outputType, outputWidth, outputHeight, outputAnimated, x, y, frame, outputTilesX, outputTilesY) {
 	var targetCanvas = outputAnimated && document.querySelector('#output canvas');
-	if (resultHeader.type === 'image/ppm' || outputType === 'ppm') {
+	if (outputType === 'ppm') {
 		targetCanvas = ppmToCanvas(new Uint8Array(arrayBuffer), targetCanvas);
 	} else {
 		var resultArray = null;
@@ -366,17 +368,25 @@ async function processResponse(videoScreen, arrayBuffer, output, outputType, out
 window.vmsrcEditor = null;
 require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 require(['vs/editor/editor.main'], function () {
-	fetch('examples/ao.comp.glsl').then(res => res.text()).then(text => {
+	fetch('examples/mandel.comp.glsl').then(res => res.text()).then(text => {
 		var config = {
 			OutputSize: [1228800],
 			Workgroups: [1, 1, 1],
 			Inputs: [640, 480, 4, 0],
 			OutputType: ['float32gray', '640', '480'],
 			Animated: ['false'],
+			GPUOnly: ['false'],
+			Interactive: ['false'],
 			Tiles: []
 		};
+		var keys = [];
+		for (var key in config) {
+			keys.push(key);
+		}
+		// Matches "// ConfigKey value1, value2, value3 value4 value5 ..."
+		var keyRegExp = new RegExp('^//\\s*(' + keys.join("|") + ')\\s+(.*)');
 		text.split("\n").forEach(line => {
-			var m = line.match(/^\/\/\s*(OutputSize|Workgroups|Inputs|OutputType|Animated|Tiles|GPUOnly|Interactive)\s+(.*)/);
+			var m = line.match(keyRegExp);
 			if (m) {
 				var key = m[1];
 				var value = m[2].replace(/^\s+|\s+$/g, '').split(/,| +/).map(s => s.replace(/\s+/g, ''));
