@@ -1,5 +1,6 @@
 GLSL_VALIDATOR=glslangValidator
 SPIRV_CROSS_ISPC=spirv-cross
+MOLTENVK_PATH=$(HOME)/code/MoltenVK
 
 FLAGS=
 TARGET=kernel
@@ -22,6 +23,11 @@ LIBS=-lm -lpthread -lstdc++
 
 ifeq ($(PLATFORM),windows)
   LIBS=
+endif
+
+VULKAN_FLAGS=-lvulkan 
+ifeq ($(MY_PLATFORM),macos)
+  VULKAN_FLAGS=-L$(MOLTENVK_PATH)/Package/Release/MoltenVK/macOS/dynamic -lMoltenVK -I$(MOLTENVK_PATH)/Package/Release/MoltenVK/include
 endif
 
 ifeq ($(ARCH),arm)
@@ -62,7 +68,7 @@ ispc-bin:
 else
 runner:
 	mkdir -p bin
-	clang++ -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -lvulkan -std=c++11 $(LINK_FLAGS)
+	clang++ $(VULKAN_FLAGS) -Iobjs/ -m$(BITS) -O2 -o bin/vulkanRunner-$(PLATFORM)-$(ARCH) vulkanRunner.cpp -std=c++11 $(LINK_FLAGS)
 
 ispc-runner:
 	clang++ -Iobjs/ -m$(BITS) -O2 -c -o objs/ispcRunner-$(PLATFORM)-$(ARCH).o ispcRunner.cpp -std=c++11 $(LINK_FLAGS)
