@@ -1,11 +1,17 @@
 ispc/build/targets
 spirv/build/targets
 spirv/build/windows/x64
+spirv/build/*input
+spirv/build/*.pgm
+spirv/build/*.rgba
 node_modules
 *~
 \#*\#
 spirv/.DS_Store
 yarn-error.log
+
+toys/fast_wc
+toys/mmap_spin
 toys/mmap_recv
 toys/mmap_send
 toys/ptrace_kill

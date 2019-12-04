@@ -1,0 +1,8 @@
+# Hosts in the cluster - used by start_cluster and stop_cluster.
+#
+# Uses SSH for host connection, so these can be hosts defined in .ssh/config
+#
+# Hosts are separated by whitespace.
+
+host1
+host2

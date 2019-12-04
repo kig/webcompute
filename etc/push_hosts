@@ -1,0 +1,11 @@
+# Hosts that are targets for deploy.
+#
+# Separate from cluster_hosts because a single deploy host might host the
+# deployment directory for a number of cluster hosts.
+#
+# Uses SSH for host connection, so these can be hosts defined in .ssh/config
+#
+# Hosts are separated by whitespace.
+
+host1
+host2
