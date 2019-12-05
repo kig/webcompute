@@ -7,12 +7,25 @@ What does it do? Compiles GLSL compute shaders to SPIR-V and runs them on the GP
 ## Quickstart (only run this on a trusted network / behind firewall / inside a VM)
 
 ```
+git clone https://github.com/kig/webcompute
+cd webcompute
 yarn
 node src/server.js
 open http://localhost:7172
 ```
 
 (HTTPS and authentication is coming.)
+
+## Build your own binaries
+
+On Windows you need VS2017, on Mac and Linux you need `clang++` and Vulkan libraries installed. On Mac, you need MoltenVK in `$HOME/code/MoltenVK`. There's a big bunch of utility & compiler binaries for different platforms `ispc/` and `spirv/`.
+
+To build the runner programs and objects:
+
+```
+(cd spirv/build && make all)
+(cd ispc/build && make all)
+```
 
 ## How does it work?
 
