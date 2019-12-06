@@ -23,8 +23,8 @@ On Windows you need VS2017, on Mac and Linux you need `clang++` and Vulkan libra
 To build the runner programs and objects:
 
 ```
-(cd spirv/build && make all)
-(cd ispc/build && make all)
+(cd spirv/build && make runner ispc-runner)
+(cd ispc/build && make runner tasksys)
 ```
 
 ## How does it work?
